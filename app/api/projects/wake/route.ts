@@ -39,17 +39,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Log current sandbox state using correct property
-    console.log(`[API] Current sandbox state: ${sandbox.state}`);
+    console.log(`[API] Current sandbox state: ${(sandbox as any).state}`);
     console.log(`[API] Sandbox properties:`, {
       id: sandbox.id,
-      state: sandbox.state,
+      state: (sandbox as any).state,
       created: sandbox.createdAt,
       target: sandbox.target,
       public: sandbox.public
     });
 
     // Start the sandbox if it's stopped
-    if (sandbox.state === 'stopped' || !sandbox.state) {
+    if ((sandbox as any).state === 'stopped' || !(sandbox as any).state) {
       console.log(`[API] Starting sandbox ${sandboxId}...`);
       
       try {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         // Refresh sandbox data after starting
         console.log(`[API] Refreshing sandbox data...`);
         await sandbox.refreshData();
-        console.log(`[API] Sandbox state after refresh: ${sandbox.state}`);
+        console.log(`[API] Sandbox state after refresh: ${(sandbox as any).state}`);
         
       } catch (startError) {
         console.log(`[API] Sandbox.start() failed:`, startError);
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
           JSON.stringify({ 
             error: `Failed to start sandbox: ${startError}`,
             sandboxId: sandboxId,
-            currentState: sandbox.state
+            currentState: (sandbox as any).state
           }),
           { 
             status: 500, 
@@ -90,10 +90,10 @@ export async function POST(req: NextRequest) {
       
       // Final state check
       await sandbox.refreshData();
-      console.log(`[API] Final sandbox state: ${sandbox.state}`);
+      console.log(`[API] Final sandbox state: ${(sandbox as any).state}`);
       
-      if (sandbox.state !== 'started') {
-        console.log(`[API] Warning: Sandbox state is '${sandbox.state}', expected 'started'`);
+      if ((sandbox as any).state !== 'started') {
+        console.log(`[API] Warning: Sandbox state is '${(sandbox as any).state}', expected 'started'`);
       }
       
       // Now that sandbox is running, start the development server
@@ -146,6 +146,8 @@ export async function POST(req: NextRequest) {
           ];
           
           for (const dir of projectDirs) {
+            if (!dir) continue; // Skip if dir is undefined
+            
             try {
               console.log(`[API] Trying to restart dev server in ${dir}`);
               
@@ -209,7 +211,7 @@ export async function POST(req: NextRequest) {
                 JSON.stringify({
                   success: true,
                   status: 'started',
-                  state: sandbox.state,
+                  state: (sandbox as any).state,
                   isOnline: true,
                   previewUrl: preview.url,
                   sandboxId: sandboxId,
@@ -233,7 +235,7 @@ export async function POST(req: NextRequest) {
           JSON.stringify({
             success: true,
             status: 'started',
-            state: sandbox.state,
+            state: (sandbox as any).state,
             isOnline: true,
             previewUrl: preview?.url || null,
             sandboxId: sandboxId,
@@ -254,7 +256,7 @@ export async function POST(req: NextRequest) {
           JSON.stringify({
             success: true,
             status: 'started',
-            state: sandbox.state,
+            state: (sandbox as any).state,
             isOnline: true,
             previewUrl: preview?.url || null,
             sandboxId: sandboxId,
@@ -267,11 +269,11 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      console.log(`[API] Sandbox is already in state: ${sandbox.state}`);
+      console.log(`[API] Sandbox is already in state: ${(sandbox as any).state}`);
     }
 
     // Fallback: Get preview URL even if sandbox was already started
-    console.log(`[API] Getting preview URL for sandbox in state: ${sandbox.state}`);
+    console.log(`[API] Getting preview URL for sandbox in state: ${(sandbox as any).state}`);
     const preview = await sandbox.getPreviewLink(3000);
     console.log(`[API] Final preview link result:`, preview);
 
@@ -279,7 +281,7 @@ export async function POST(req: NextRequest) {
       JSON.stringify({
         success: true,
         status: 'started',
-        state: sandbox.state,
+        state: (sandbox as any).state,
         isOnline: true,
         previewUrl: preview?.url || null,
         sandboxId: sandboxId,
