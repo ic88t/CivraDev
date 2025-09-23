@@ -42,13 +42,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get additional info
+    // Get additional info - spread all available properties from sandbox
     let debugInfo: any = {
-      id: sandbox.id,
-      created: sandbox.created,
-      region: sandbox.region,
-      // Note: status property may not be available directly on sandbox object
-      ...sandbox // Spread all available properties
+      ...sandbox
     };
 
     // Try to get sandbox status through a different method
