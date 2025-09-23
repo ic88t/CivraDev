@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     const formattedWorkspaces = (workspaces || []).map(workspace => {
       const members = workspace.workspace_members || [];
       const projects = workspace.projects || [];
-      const userMember = members.find(member => member.profiles?.id === user.id);
+      const userMember = members.find((member: any) => member.profiles?.id === user.id);
       
       return {
         id: workspace.id,
