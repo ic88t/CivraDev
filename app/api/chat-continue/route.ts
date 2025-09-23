@@ -470,7 +470,7 @@ SCRIPT_EOF`,
           "node intelligent-modify.js",
           projectDir,
           {
-            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY
+            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || ""
           },
           120000 // 2 minute timeout
         );
