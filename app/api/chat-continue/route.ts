@@ -437,15 +437,15 @@ CRITICAL REQUIREMENTS:
     
   } catch (error) {
     console.error('=== DETAILED ERROR ===');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     console.error('API Key present:', !!process.env.ANTHROPIC_API_KEY);
     
     console.log('__ERROR__', JSON.stringify({
-      error: error.message,
-      stack: error.stack,
-      type: error.constructor.name
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      type: error instanceof Error ? error.constructor.name : typeof error
     }));
   }
 }
@@ -557,9 +557,10 @@ SCRIPT_EOF`,
 
       } catch (error) {
         console.error("[CHAT] Error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Chat processing failed";
         await safeWrite(`data: ${JSON.stringify({ 
           type: "error", 
-          content: error.message || "Chat processing failed" 
+          content: errorMessage 
         })}\n\n`);
         safeClose();
       } finally {
@@ -578,7 +579,7 @@ SCRIPT_EOF`,
   } catch (error: any) {
     console.error("[CHAT] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to continue chat" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to continue chat" }),
       { 
         status: 500, 
         headers: { "Content-Type": "application/json" } 
