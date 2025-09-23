@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[FORCE-START] Current sandbox status: ${sandbox.status}`);
+    console.log(`[FORCE-START] Current sandbox status: ${(sandbox as any).status || 'unknown'}`);
 
     // Try multiple approaches to start the sandbox
     let startSuccess = false;

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       return new Response(
         JSON.stringify({ 
           error: "Sandbox not found",
-          availableSandboxes: sandboxes.map((s: any) => ({ id: s.id, status: s.status }))
+          availableSandboxes: sandboxes.map((s: any) => ({ id: s.id, status: (s as any).status || 'unknown' }))
         }),
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
@@ -45,13 +45,25 @@ export async function GET(req: NextRequest) {
     // Get additional info
     let debugInfo: any = {
       id: sandbox.id,
-      status: sandbox.status,
       created: sandbox.created,
-      region: sandbox.region
+      region: sandbox.region,
+      // Note: status property may not be available directly on sandbox object
+      ...sandbox // Spread all available properties
     };
 
+    // Try to get sandbox status through a different method
+    let sandboxStatus = 'unknown';
+    try {
+      // The status might be available through a different property or method
+      sandboxStatus = (sandbox as any).status || 'unknown';
+    } catch (e) {
+      console.log('Could not determine sandbox status:', e);
+    }
+
+    debugInfo.status = sandboxStatus;
+
     // If sandbox is running, try to get more details
-    if (sandbox.status === 'running') {
+    if (sandboxStatus === 'running') {
       try {
         debugInfo.rootDir = await sandbox.getUserRootDir();
         debugInfo.previewLink = await sandbox.getPreviewLink(3000);
