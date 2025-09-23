@@ -297,7 +297,7 @@ SCRIPT_EOF`,
       "node generate.js",
       projectDir,
       {
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
         NODE_PATH: `${projectDir}/node_modules`,
       },
       600000 // 10 minute timeout

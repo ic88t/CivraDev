@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
           cwd: process.cwd(), // Ensure we're in the right directory
           env: {
             ...process.env,
-            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
             NODE_PATH: path.join(process.cwd(), "node_modules"),
           },
         });

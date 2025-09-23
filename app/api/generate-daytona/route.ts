@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
           env: {
             ...process.env,
             DAYTONA_API_KEY: process.env.DAYTONA_API_KEY,
-            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+            ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
           },
         });
         
