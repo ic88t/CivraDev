@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const isOnline = sandbox.state === 'started' || sandbox.state === 'running';
+    const isOnline = sandbox.state === 'started';
     let previewUrl = null;
 
     // If sandbox is running, try to get preview URL
