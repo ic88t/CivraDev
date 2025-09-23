@@ -18,7 +18,7 @@ export default function PricingPage() {
                Plans from first idea to full scale
              </h1>
              <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-               Start for free. Upgrade when you're ready.
+                Start for free. Upgrade when you&apos;re ready.
              </p>
            </div>
 
@@ -326,7 +326,7 @@ export default function PricingPage() {
              <div className="grid md:grid-cols-2 gap-6 text-left max-w-4xl mx-auto">
                <div className="space-y-6">
                  <div>
-                   <h4 className="text-lg font-semibold text-white mb-2">What's included in the free plan?</h4>
+                    <h4 className="text-lg font-semibold text-white mb-2">What&apos;s included in the free plan?</h4>
                    <p className="text-gray-400 text-sm leading-relaxed">Get 10 message credits per month, up to 3 projects, and access to basic Web3 templates. Perfect for trying out AI-powered dApp development.</p>
                  </div>
                  <div>
@@ -345,7 +345,7 @@ export default function PricingPage() {
                  </div>
                  <div>
                    <h4 className="text-lg font-semibold text-white mb-2">Do you offer refunds?</h4>
-                   <p className="text-gray-400 text-sm leading-relaxed">Yes, we offer a 14-day money-back guarantee for all paid plans. Full refund if you're not satisfied.</p>
+                    <p className="text-gray-400 text-sm leading-relaxed">Yes, we offer a 14-day money-back guarantee for all paid plans. Full refund if you&apos;re not satisfied.</p>
                  </div>
                  <div>
                    <h4 className="text-lg font-semibold text-white mb-2">What types of dApps can I build?</h4>
