@@ -203,7 +203,7 @@ export default function UsageDashboard() {
               <div>
                 <h4 className="text-yellow-400 font-medium text-sm">Credit Usage Warning</h4>
                 <p className="text-yellow-300 text-sm mt-1">
-                  You're running low on credits. Consider upgrading your plan to avoid interruptions.
+                  You&apos;re running low on credits. Consider upgrading your plan to avoid interruptions.
                 </p>
                 <a 
                   href="/pricing"
@@ -226,7 +226,7 @@ export default function UsageDashboard() {
               <div>
                 <h4 className="text-red-400 font-medium text-sm">Credits Exhausted</h4>
                 <p className="text-red-300 text-sm mt-1">
-                  You've used all your {messageCreditsRemaining <= 0 ? 'message' : 'integration'} credits for this billing period. 
+                  You&apos;ve used all your {messageCreditsRemaining <= 0 ? 'message' : 'integration'} credits for this billing period. 
                   Upgrade your plan to continue using the platform.
                 </p>
                 <a 
