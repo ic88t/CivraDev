@@ -20,9 +20,10 @@ function createSupabaseServer() {
 }
 
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const sandboxId = searchParams.get('id');
+  
   try {
-    const { searchParams } = new URL(req.url);
-    const sandboxId = searchParams.get('id');
 
     if (!sandboxId) {
       return new Response(
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
 
       } catch (daytonaError) {
         result.daytonaInfo = {
-          error: daytonaError.message,
+          error: daytonaError instanceof Error ? daytonaError.message : String(daytonaError),
           apiKeyPresent: !!process.env.DAYTONA_API_KEY
         };
         console.error('[DEBUG] Daytona API error:', daytonaError);
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
     console.error("[DEBUG] Error:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "Debug check failed",
+        error: error instanceof Error ? error.message : "Debug check failed",
         sandboxId
       }),
       {
