@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { getCurrentUser, getCurrentUserFromRequest } from "@/lib/auth-utils";
+import { getCurrentUser, getCurrentUserFromRequest, requireAuth } from "@/lib/auth-utils";
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
 
 // Create server-side Supabase client
 function createSupabaseServer() {

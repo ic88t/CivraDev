@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/auth-utils";
+import { getCurrentUser, getCurrentUserFromRequest, requireAuth } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/workspaces/[id]/members - Invite user to workspace
