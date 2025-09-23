@@ -65,13 +65,13 @@ export async function POST(req: NextRequest) {
         console.log(`[FORCE-START] Sandbox constructor:`, sandbox.constructor.name);
         
         // Try calling start again with different approach
-        if (typeof sandbox.restart === 'function') {
+        if (typeof (sandbox as any).restart === 'function') {
           console.log(`[FORCE-START] Trying restart method...`);
-          await sandbox.restart();
+          await (sandbox as any).restart();
           startSuccess = true;
-        } else if (typeof sandbox.wake === 'function') {
+        } else if (typeof (sandbox as any).wake === 'function') {
           console.log(`[FORCE-START] Trying wake method...`);
-          await sandbox.wake();
+          await (sandbox as any).wake();
           startSuccess = true;
         } else {
           // Try start again
@@ -112,9 +112,9 @@ export async function POST(req: NextRequest) {
         const updatedSandboxes = await daytona.list();
         const updatedSandbox = updatedSandboxes.find((s: any) => s.id === sandboxId);
 
-        console.log(`[FORCE-START] Attempt ${attempts + 1}/${maxAttempts}: Status = ${updatedSandbox?.status}`);
+        console.log(`[FORCE-START] Attempt ${attempts + 1}/${maxAttempts}: Status = ${(updatedSandbox as any)?.status || 'unknown'}`);
 
-        if (updatedSandbox?.status === 'running') {
+        if ((updatedSandbox as any)?.status === 'running' && updatedSandbox) {
           // Try to get preview link multiple times
           for (let previewAttempt = 0; previewAttempt < 5; previewAttempt++) {
             try {

@@ -86,13 +86,13 @@ export async function GET(req: NextRequest) {
               apiKey: process.env.DAYTONA_API_KEY!,
             });
 
-            const sandbox = await daytona.get(project.sandbox_id);
-            status = sandbox.state === 'running' ? 'ACTIVE' :
-                    sandbox.state === 'stopped' ? 'STOPPED' :
+            const sandbox = await daytona.get(project.sandbox_id);       
+            status = (sandbox as any).state === 'running' ? 'ACTIVE' :
+                    (sandbox as any).state === 'stopped' ? 'STOPPED' :
                     'ERROR';
 
             // Try to get preview URL if sandbox is running
-            if (sandbox.state === 'running') {
+            if ((sandbox as any).state === 'running') {
               try {
                 const preview = await sandbox.getPreviewLink(3000);
                 previewUrl = preview?.url || null;
