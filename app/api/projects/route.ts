@@ -187,8 +187,14 @@ export async function DELETE(req: NextRequest) {
       apiKey: process.env.DAYTONA_API_KEY,
     });
 
-    // Delete the sandbox
-    await daytona.delete(sandboxId);
+    // Delete the sandbox - need to get sandbox object first since delete() expects Sandbox, not string
+    try {
+      const sandbox = await daytona.get(sandboxId);
+      await daytona.delete(sandbox);
+    } catch (error) {
+      console.log('Sandbox may already be deleted or not found:', error);
+      // Continue anyway since the project will be deleted from database
+    }
 
     return new Response(
       JSON.stringify({ success: true }),
