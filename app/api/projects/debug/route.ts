@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     console.log('[DEBUG] Database lookup result:', { project, dbError });
 
-    const result = {
+    const result: any = {
       sandboxId,
       databaseInfo: {
         found: !!project,
