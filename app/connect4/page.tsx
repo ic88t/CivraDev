@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 
 type Player = 1 | 2;
 type Cell = 0 | Player;
@@ -158,12 +159,12 @@ export default function Connect4() {
         New Game
       </button>
 
-      <a
+      <Link
         href="/"
         className="mt-4 text-blue-300 hover:text-blue-400 transition-colors"
       >
         ← Back to Civra UI
-      </a>
+      </Link>
     </div>
   );
 }

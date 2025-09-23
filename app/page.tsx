@@ -163,7 +163,7 @@ export default function Home() {
 
           <p className="text-xl sm:text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
             Turn your Web3 ideas into production-ready dApps in minutes. Powered by
-            Claude's advanced AI capabilities and blockchain technology.
+            Claude&apos;s advanced AI capabilities and blockchain technology.
           </p>
 
           {/* Tab Navigation */}
