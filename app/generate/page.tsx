@@ -353,81 +353,138 @@ function GeneratePageContent() {
   };
 
   const checkSandboxStatusAndWakeup = async (sandboxId: string) => {
+    const startTime = Date.now();
+    console.log(`[Frontend] Starting sandbox status check for ID: ${sandboxId} at ${new Date().toISOString()}`);
+
     try {
       setSandboxStatus('checking');
       setStatusMessage('Checking sandbox status...');
 
       // Get auth token for API requests
+      console.log('[Frontend] Getting auth session...');
       const { data: { session } } = await supabase.auth.getSession();
       const authHeaders: Record<string, string> = {};
-      
+
       if (session?.access_token) {
         authHeaders["Authorization"] = `Bearer ${session.access_token}`;
+        console.log('[Frontend] Auth token present, length:', session.access_token.length);
+      } else {
+        console.log('[Frontend] No auth token available');
       }
 
       // First, check the current status of the sandbox
-      const statusResponse = await fetch(`/api/projects/status?id=${sandboxId}`, {
+      const statusUrl = `/api/projects/status?id=${sandboxId}`;
+      console.log(`[Frontend] Making status request to: ${statusUrl}`);
+      const statusRequestStart = Date.now();
+
+      const statusResponse = await fetch(statusUrl, {
         headers: authHeaders
       });
 
+      const statusRequestDuration = Date.now() - statusRequestStart;
+      console.log(`[Frontend] Status request completed in ${statusRequestDuration}ms, status: ${statusResponse.status}`);
+
       if (!statusResponse.ok) {
-        const errorData = await statusResponse.json();
-        console.error('Status check failed:', errorData);
+        console.error(`[Frontend] Status request failed with status ${statusResponse.status}`);
+        let errorData;
+        try {
+          errorData = await statusResponse.json();
+          console.error('[Frontend] Error response body:', errorData);
+        } catch (parseError) {
+          console.error('[Frontend] Could not parse error response:', parseError);
+          errorData = { error: 'Unknown error', status: statusResponse.status };
+        }
 
         if (statusResponse.status === 404) {
           setSandboxStatus('error');
           setStatusMessage('Sandbox no longer exists or was deleted');
+          console.log('[Frontend] Sandbox not found (404)');
         } else {
           setSandboxStatus('error');
           setStatusMessage('Failed to check sandbox status');
+          console.log('[Frontend] Status check failed with non-404 error');
         }
         return;
       }
 
       const statusData = await statusResponse.json();
-      console.log('Sandbox status:', statusData);
+      console.log('[Frontend] Sandbox status response:', {
+        ...statusData,
+        previewUrl: statusData.previewUrl ? '[URL_SET]' : null
+      });
 
       if (statusData.isOnline) {
         // Sandbox is already online
+        console.log('[Frontend] Sandbox is already online');
         setSandboxStatus('ready');
         setStatusMessage('Sandbox is ready');
         if (statusData.previewUrl) {
           setPreviewUrl(statusData.previewUrl);
+          console.log('[Frontend] Preview URL set from status response');
         }
+        const totalDuration = Date.now() - startTime;
+        console.log(`[Frontend] Status check completed successfully in ${totalDuration}ms`);
         return;
       }
 
       // Sandbox is offline, need to wake it up
+      console.log(`[Frontend] Sandbox is offline (state: ${statusData.status}), attempting to wake up`);
       setSandboxStatus('waking');
       setStatusMessage('Waking up sandbox...');
 
+      const wakeRequestStart = Date.now();
       const wakeResponse = await fetch('/api/projects/wake', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...authHeaders
         },
         body: JSON.stringify({ sandboxId })
       });
 
+      const wakeRequestDuration = Date.now() - wakeRequestStart;
+      console.log(`[Frontend] Wake request completed in ${wakeRequestDuration}ms, status: ${wakeResponse.status}`);
+
       if (wakeResponse.ok) {
         const wakeData = await wakeResponse.json();
+        console.log('[Frontend] Wake response:', {
+          ...wakeData,
+          previewUrl: wakeData.previewUrl ? '[URL_SET]' : null
+        });
+
         if (wakeData.success && wakeData.isOnline) {
           setSandboxStatus('ready');
           setStatusMessage(wakeData.message || 'Sandbox is ready');
           if (wakeData.previewUrl) {
             setPreviewUrl(wakeData.previewUrl);
+            console.log('[Frontend] Preview URL set from wake response');
           }
+          const totalDuration = Date.now() - startTime;
+          console.log(`[Frontend] Sandbox wakeup completed successfully in ${totalDuration}ms`);
         } else {
           setSandboxStatus('error');
           setStatusMessage('Failed to wake up sandbox');
+          console.log('[Frontend] Wake request succeeded but sandbox not online');
         }
       } else {
+        let errorData;
+        try {
+          errorData = await wakeResponse.json();
+          console.error('[Frontend] Wake request failed:', errorData);
+        } catch (parseError) {
+          console.error('[Frontend] Could not parse wake error response:', parseError);
+        }
         setSandboxStatus('error');
         setStatusMessage('Failed to wake up sandbox');
+        console.log('[Frontend] Wake request failed with HTTP error');
       }
-    } catch (error) {
-      console.error('Failed to check/wake sandbox:', error);
+    } catch (error: any) {
+      const totalDuration = Date.now() - startTime;
+      console.error(`[Frontend] Failed to check/wake sandbox after ${totalDuration}ms:`, {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
       setSandboxStatus('error');
       setStatusMessage('Error checking sandbox status');
     }

@@ -1,17 +1,32 @@
 import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  console.log(`[FORCE-START] Force start request started at ${new Date().toISOString()}`);
+
   try {
+    console.log('[FORCE-START] Parsing request body...');
     const { sandboxId } = await req.json();
+    console.log(`[FORCE-START] Request for sandbox ID: ${sandboxId}`);
 
     if (!sandboxId) {
+      console.log('[FORCE-START] Error: No sandbox ID provided');
       return new Response(
         JSON.stringify({ error: "Sandbox ID is required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
+    // Check environment variables
+    const hasApiKey = !!process.env.DAYTONA_API_KEY;
+    const apiKeyLength = process.env.DAYTONA_API_KEY?.length || 0;
+    console.log(`[FORCE-START] Environment check:`);
+    console.log(`[FORCE-START] - DAYTONA_API_KEY present: ${hasApiKey}`);
+    console.log(`[FORCE-START] - API key length: ${apiKeyLength}`);
+    console.log(`[FORCE-START] - NODE_ENV: ${process.env.NODE_ENV}`);
+
     if (!process.env.DAYTONA_API_KEY) {
+      console.log('[FORCE-START] Error: DAYTONA_API_KEY not configured');
       return new Response(
         JSON.stringify({ error: "DAYTONA_API_KEY not configured" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
@@ -21,15 +36,34 @@ export async function POST(req: NextRequest) {
     console.log(`[FORCE-START] Force starting sandbox: ${sandboxId}`);
 
     // Dynamic import to avoid ESM issues during build
+    console.log('[FORCE-START] Importing Daytona SDK...');
     const { Daytona } = await import('@daytonaio/sdk');
-    
+    console.log('[FORCE-START] Daytona SDK imported successfully');
+
+    console.log('[FORCE-START] Initializing Daytona client...');
     const daytona = new Daytona({
       apiKey: process.env.DAYTONA_API_KEY,
     });
+    console.log('[FORCE-START] Daytona client initialized');
 
     // Get sandbox details
+    console.log('[FORCE-START] Listing sandboxes to find target...');
+    const listStartTime = Date.now();
     const sandboxes = await daytona.list();
+    const listDuration = Date.now() - listStartTime;
+    console.log(`[FORCE-START] Sandboxes listed in ${listDuration}ms, found ${sandboxes.length} total sandboxes`);
+
     const sandbox = sandboxes.find((s: any) => s.id === sandboxId);
+    console.log(`[FORCE-START] Target sandbox search result: ${sandbox ? 'found' : 'not found'}`);
+
+    if (sandbox) {
+      console.log(`[FORCE-START] Sandbox details: ${JSON.stringify({
+        id: (sandbox as any).id,
+        name: (sandbox as any).name || 'unnamed',
+        state: (sandbox as any).state,
+        status: (sandbox as any).status
+      })}`);
+    }
 
     if (!sandbox) {
       return new Response(
@@ -38,7 +72,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[FORCE-START] Current sandbox status: ${sandbox.status}`);
+    console.log(`[FORCE-START] Current sandbox status: ${(sandbox as any).status || 'unknown'}`);
 
     // Try multiple approaches to start the sandbox
     let startSuccess = false;
@@ -65,13 +99,13 @@ export async function POST(req: NextRequest) {
         console.log(`[FORCE-START] Sandbox constructor:`, sandbox.constructor.name);
         
         // Try calling start again with different approach
-        if (typeof sandbox.restart === 'function') {
+        if (typeof (sandbox as any).restart === 'function') {
           console.log(`[FORCE-START] Trying restart method...`);
-          await sandbox.restart();
+          await (sandbox as any).restart();
           startSuccess = true;
-        } else if (typeof sandbox.wake === 'function') {
+        } else if (typeof (sandbox as any).wake === 'function') {
           console.log(`[FORCE-START] Trying wake method...`);
-          await sandbox.wake();
+          await (sandbox as any).wake();
           startSuccess = true;
         } else {
           // Try start again
@@ -110,16 +144,16 @@ export async function POST(req: NextRequest) {
       try {
         // Get updated sandbox status
         const updatedSandboxes = await daytona.list();
-        const updatedSandbox = updatedSandboxes.find((s: any) => s.id === sandboxId);
+        const updatedSandbox = updatedSandboxes?.find((s: any) => s.id === sandboxId);
 
-        console.log(`[FORCE-START] Attempt ${attempts + 1}/${maxAttempts}: Status = ${updatedSandbox?.status}`);
+        console.log(`[FORCE-START] Attempt ${attempts + 1}/${maxAttempts}: Status = ${(updatedSandbox as any)?.status}`);
 
-        if (updatedSandbox?.status === 'running') {
+        if ((updatedSandbox as any)?.status === 'running') {
           // Try to get preview link multiple times
           for (let previewAttempt = 0; previewAttempt < 5; previewAttempt++) {
             try {
               await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
-              const testPreview = await updatedSandbox.getPreviewLink(3000);
+              const testPreview = await updatedSandbox?.getPreviewLink(3000);
               
               if (testPreview?.url) {
                 console.log(`[FORCE-START] SUCCESS! Preview URL obtained: ${testPreview.url}`);
@@ -174,12 +208,34 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error("[FORCE-START] Error force starting sandbox:", error);
+    const totalDuration = Date.now() - startTime;
+    console.error(`[FORCE-START] Error force starting sandbox after ${totalDuration}ms:`, {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      status: error.status,
+      stack: error.stack
+    });
+
+    // Log additional context for debugging
+    console.error(`[FORCE-START] Error context:`, {
+      hasApiKey: !!process.env.DAYTONA_API_KEY,
+      nodeEnv: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+
     return new Response(
-      JSON.stringify({ error: error.message || "Failed to force start sandbox" }),
-      { 
-        status: 500, 
-        headers: { "Content-Type": "application/json" } 
+      JSON.stringify({
+        error: error.message || "Failed to force start sandbox",
+        errorDetails: {
+          name: error.name,
+          code: error.code,
+          duration: totalDuration
+        }
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
       }
     );
   }
