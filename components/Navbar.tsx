@@ -47,8 +47,11 @@ export default function Navbar() {
           href="/"
           className="flex items-center gap-2 text-2xl font-semibold text-white hover:opacity-90 transition-opacity"
         >
-          {/* Simple gradient square to mimic Civra logo */}
-          <span className="inline-block w-6 h-6 rounded-sm bg-gradient-to-br from-orange-400 via-pink-500 to-blue-500" />
+          <img 
+            src="/civra.png" 
+            alt="Civra Logo" 
+            className="w-12 h-12"
+          />
           Civra
         </Link>
 
