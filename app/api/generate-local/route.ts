@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         );
         
         // Use the generate-local script from the correct working directory
-        const scriptPath = path.join(process.cwd(), "scripts", "generate-local.ts");
+        const scriptPath = path.join(process.cwd(), "scripts-temp", "generate-local.ts");
         const child = spawn("npx", ["tsx", scriptPath, projectDir, prompt], {
           cwd: process.cwd(), // Ensure we're in the right directory
           env: {
