@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { DaytonaClient, createSandboxWrapper } from "@/lib/daytona-client";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,32 +42,18 @@ export async function GET(req: NextRequest) {
 
     console.log(`[API] Checking status for sandbox: ${sandboxId}`);
 
-    // Try the original SDK first, fall back to custom client if it fails
-    let daytona: any = null;
-    let usingCustomClient = false;
+    // Load Daytona SDK with webpack configuration handling ES modules
+    console.log('[API] Loading Daytona SDK (with webpack ES module fixes)...');
 
-    try {
-      console.log('[API] Attempting to use original Daytona SDK...');
-      const { Daytona } = await import('@daytonaio/sdk');
-      daytona = new Daytona({
-        apiKey: process.env.DAYTONA_API_KEY!,
-      });
-      console.log('[API] Original Daytona SDK loaded successfully');
-    } catch (sdkError: any) {
-      console.log('[API] Original SDK failed, using custom client...', {
-        error: sdkError.message,
-        code: sdkError.code
-      });
+    const { Daytona } = await import('@daytonaio/sdk');
+    const daytona = new Daytona({
+      apiKey: process.env.DAYTONA_API_KEY!,
+    });
 
-      daytona = new DaytonaClient({
-        apiKey: process.env.DAYTONA_API_KEY!,
-      });
-      usingCustomClient = true;
-      console.log('[API] Custom Daytona client initialized');
-    }
+    console.log('[API] Daytona SDK loaded successfully');
 
     // Get all sandboxes and log them for debugging
-    console.log(`[API] Attempting to list sandboxes using ${usingCustomClient ? 'custom client' : 'original SDK'}...`);
+    console.log('[API] Attempting to list sandboxes using original SDK...');
     const listStartTime = Date.now();
     const sandboxes = await daytona.list();
     const listDuration = Date.now() - listStartTime;
@@ -114,13 +99,7 @@ export async function GET(req: NextRequest) {
         console.log(`[API] Sandbox is online, attempting to get preview URL...`);
         const previewStartTime = Date.now();
 
-        let preview = null;
-        if (usingCustomClient) {
-          preview = await daytona.getPreviewLink(sandboxId, 3000);
-        } else {
-          // Using original SDK
-          preview = await sandbox.getPreviewLink(3000);
-        }
+        const preview = await sandbox.getPreviewLink(3000);
 
         const previewDuration = Date.now() - previewStartTime;
         previewUrl = preview?.url || null;

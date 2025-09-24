@@ -8,13 +8,30 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@daytonaio/sdk'],
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
       net: false,
       tls: false,
     };
+
+    if (isServer) {
+      // Handle the specific ES module issue with untildify
+      config.externals = config.externals || [];
+
+      // Add untildify as external to prevent server-side bundling issues
+      config.externals.push({
+        'untildify': 'commonjs untildify'
+      });
+
+      // Alternative: disable untildify entirely for server-side
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'untildify': false,
+      };
+    }
+
     return config;
   },
 };
