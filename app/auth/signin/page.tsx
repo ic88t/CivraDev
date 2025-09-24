@@ -9,14 +9,27 @@ function SignInPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/"
+  const error = searchParams.get("error")
   const [isLoading, setIsLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        console.log("[SignIn] Current session:", session)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        console.log("[SignIn] Session check:", {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          email: session?.user?.email,
+          error: sessionError
+        })
+
+        // Check localStorage for debugging
+        const lastAuth = localStorage.getItem('civra_last_auth')
+        if (lastAuth) {
+          console.log("[SignIn] Last successful auth:", JSON.parse(lastAuth))
+        }
+
         if (session) {
           console.log("[SignIn] Already logged in, redirecting to:", callbackUrl)
           router.push(callbackUrl)
@@ -28,31 +41,59 @@ function SignInPageContent() {
       setIsChecking(false)
     }
     checkSession()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[SignIn] Auth state change:", event, {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        email: session?.user?.email
+      })
+
+      if (event === 'SIGNED_IN' && session) {
+        console.log("[SignIn] Signed in via auth state change, redirecting")
+        router.push(callbackUrl)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [router, callbackUrl])
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      console.log('Attempting Google sign in...')
-      console.log('Current origin:', window.location.origin)
-      console.log('Callback URL:', callbackUrl)
+      console.log('[SignIn] Attempting Google sign in...')
+      console.log('[SignIn] Current origin:', window.location.origin)
+      console.log('[SignIn] Callback URL param:', callbackUrl)
+
+      // Clear any previous auth attempts
+      localStorage.removeItem('supabase.auth.token')
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent', // Force account selection
+          }
         }
       })
 
-      console.log('Google sign in response:', { data, error })
+      console.log('[SignIn] Google OAuth initiation:', { data, error })
 
       if (error) {
-        console.error('Google sign in error:', error)
-        alert(`Sign in failed: ${error.message}`)
+        console.error('[SignIn] Google sign in error:', error)
         setIsLoading(false)
+        // Don't show alert immediately, the error might be in the callback
+      } else {
+        console.log('[SignIn] Redirecting to Google OAuth...')
+        // Loading state will persist until page redirect
       }
     } catch (error) {
-      console.error('Google sign in exception:', error)
+      console.error('[SignIn] Google sign in exception:', error)
       alert(`Sign in failed: ${error}`)
       setIsLoading(false)
     }
@@ -110,6 +151,18 @@ function SignInPageContent() {
             Sign in to start building Web3 applications
           </p>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p className="text-red-400 text-sm">
+              {error === 'no_code' ? 'Authorization was cancelled or failed' :
+               error === 'no_session' ? 'Failed to create session. Please try again.' :
+               error === 'Authentication failed' ? 'Authentication failed. Please try again.' :
+               decodeURIComponent(error)}
+            </p>
+          </div>
+        )}
 
         {/* Sign-in options */}
         <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800">
