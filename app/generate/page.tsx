@@ -808,11 +808,64 @@ function GeneratePageContent() {
           )}
 
           {previewUrl && (
-            <iframe
-              src={previewUrl}
-              className="w-full h-full"
-              title="Website Preview"
-            />
+            <div className="w-full h-full relative">
+              {/* Preview controls */}
+              <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <button
+                  onClick={() => window.open(previewUrl, '_blank')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1 shadow-lg"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open in New Tab
+                </button>
+                <button
+                  onClick={() => {
+                    const iframe = document.querySelector('iframe[title="Website Preview"]') as HTMLIFrameElement;
+                    if (iframe) {
+                      iframe.src = iframe.src; // Reload the iframe
+                    }
+                  }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1 shadow-lg"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reload
+                </button>
+              </div>
+
+              {/* Iframe with Daytona warning detection */}
+              <iframe
+                src={previewUrl}
+                className="w-full h-full"
+                title="Website Preview"
+                onLoad={() => {
+                  // Check if the iframe loaded the Daytona warning page
+                  const iframe = document.querySelector('iframe[title="Website Preview"]') as HTMLIFrameElement;
+                  if (iframe && iframe.contentWindow) {
+                    try {
+                      const iframeUrl = iframe.contentWindow.location.href;
+                      if (iframeUrl.includes('daytona') && !iframeUrl.includes('proxy.daytona.works')) {
+                        console.log('[Frontend] Daytona warning page detected in iframe');
+                      }
+                    } catch (e) {
+                      // Cross-origin iframe access will fail, which is expected
+                      console.log('[Frontend] Iframe loaded (cross-origin)');
+                    }
+                  }
+                }}
+              />
+
+              {/* Help overlay - always visible when iframe has issues */}
+              <div className="absolute bottom-4 left-4 bg-yellow-500 text-black px-3 py-2 rounded-lg text-sm max-w-xs">
+                <p className="font-medium mb-1">💡 Tip</p>
+                <p className="text-xs">
+                  If the preview shows a warning page, use the "Open in New Tab" button above for full functionality.
+                </p>
+              </div>
+            </div>
           )}
 
           {!previewUrl && !isGenerating && !isContinuing && (
