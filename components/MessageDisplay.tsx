@@ -31,7 +31,7 @@ export default function MessageDisplay({ messages }: MessageDisplayProps) {
       })
       .filter(Boolean);
     
-    setGeneratedPages([...new Set(pages)]);
+    setGeneratedPages(Array.from(new Set(pages)));
   }, [messages]);
   
   if (messages.length === 0) return null;
