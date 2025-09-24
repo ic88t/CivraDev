@@ -862,7 +862,7 @@ function GeneratePageContent() {
               <div className="absolute bottom-4 left-4 bg-yellow-500 text-black px-3 py-2 rounded-lg text-sm max-w-xs">
                 <p className="font-medium mb-1">💡 Tip</p>
                 <p className="text-xs">
-                  If the preview shows a warning page, use the "Open in New Tab" button above for full functionality.
+                  If the preview shows a warning page, use the &quot;Open in New Tab&quot; button above for full functionality.
                 </p>
               </div>
             </div>
