@@ -20,10 +20,14 @@ export async function POST(req: NextRequest) {
     // Check environment variables
     const hasApiKey = !!process.env.DAYTONA_API_KEY;
     const apiKeyLength = process.env.DAYTONA_API_KEY?.length || 0;
+    const apiKeyFirst4 = process.env.DAYTONA_API_KEY?.substring(0, 4) || 'none';
     console.log(`[FORCE-START] Environment check:`);
     console.log(`[FORCE-START] - DAYTONA_API_KEY present: ${hasApiKey}`);
     console.log(`[FORCE-START] - API key length: ${apiKeyLength}`);
+    console.log(`[FORCE-START] - API key starts with: ${apiKeyFirst4}...`);
     console.log(`[FORCE-START] - NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[FORCE-START] - Platform: ${process.platform}`);
+    console.log(`[FORCE-START] - Runtime: ${typeof process !== 'undefined' ? 'Node.js' : 'Browser'}`);
 
     if (!process.env.DAYTONA_API_KEY) {
       console.log('[FORCE-START] Error: DAYTONA_API_KEY not configured');
@@ -37,8 +41,20 @@ export async function POST(req: NextRequest) {
 
     // Dynamic import to avoid ESM issues during build
     console.log('[FORCE-START] Importing Daytona SDK...');
-    const { Daytona } = await import('@daytonaio/sdk');
-    console.log('[FORCE-START] Daytona SDK imported successfully');
+    let Daytona;
+    try {
+      const daytonaModule = await import('@daytonaio/sdk');
+      Daytona = daytonaModule.Daytona || daytonaModule.default?.Daytona || daytonaModule.default;
+      console.log('[FORCE-START] Daytona SDK imported successfully');
+      console.log('[FORCE-START] Daytona constructor available:', !!Daytona);
+    } catch (importError: any) {
+      console.error('[FORCE-START] Failed to import Daytona SDK:', {
+        message: importError.message,
+        code: importError.code,
+        stack: importError.stack
+      });
+      throw new Error(`Failed to import Daytona SDK: ${importError.message}`);
+    }
 
     console.log('[FORCE-START] Initializing Daytona client...');
     const daytona = new Daytona({
