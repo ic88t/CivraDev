@@ -23,10 +23,14 @@ export async function GET(req: NextRequest) {
     // Check environment variables
     const hasApiKey = !!process.env.DAYTONA_API_KEY;
     const apiKeyLength = process.env.DAYTONA_API_KEY?.length || 0;
+    const apiKeyFirst4 = process.env.DAYTONA_API_KEY?.substring(0, 4) || 'none';
     console.log(`[API] Environment check:`);
     console.log(`[API] - DAYTONA_API_KEY present: ${hasApiKey}`);
     console.log(`[API] - API key length: ${apiKeyLength}`);
+    console.log(`[API] - API key starts with: ${apiKeyFirst4}...`);
     console.log(`[API] - NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[API] - Platform: ${process.platform}`);
+    console.log(`[API] - Runtime: ${typeof process !== 'undefined' ? 'Node.js' : 'Browser'}`);
 
     if (!process.env.DAYTONA_API_KEY) {
       console.log('[API] Error: DAYTONA_API_KEY not configured');
@@ -40,8 +44,20 @@ export async function GET(req: NextRequest) {
 
     // Dynamic import to avoid ESM issues during build
     console.log('[API] Importing Daytona SDK...');
-    const { Daytona } = await import('@daytonaio/sdk');
-    console.log('[API] Daytona SDK imported successfully');
+    let Daytona;
+    try {
+      const daytonaModule = await import('@daytonaio/sdk');
+      Daytona = daytonaModule.Daytona || daytonaModule.default?.Daytona || daytonaModule.default;
+      console.log('[API] Daytona SDK imported successfully');
+      console.log('[API] Daytona constructor available:', !!Daytona);
+    } catch (importError: any) {
+      console.error('[API] Failed to import Daytona SDK:', {
+        message: importError.message,
+        code: importError.code,
+        stack: importError.stack
+      });
+      throw new Error(`Failed to import Daytona SDK: ${importError.message}`);
+    }
 
     console.log('[API] Initializing Daytona client...');
     const daytona = new Daytona({
