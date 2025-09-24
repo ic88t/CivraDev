@@ -3,6 +3,8 @@ import { getCurrentUser, getCurrentUserFromRequest } from "@/lib/auth-utils";
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+
 // Create server-side Supabase client
 function createSupabaseServer() {
   const cookieStore = cookies()

@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { getCurrentUser, getCurrentUserFromRequest } from "@/lib/auth-utils";
 import { getCreditUsageStats, getUserPlan, getProjectLimits } from "@/lib/credits";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     console.log('[Usage API] Starting request...');
