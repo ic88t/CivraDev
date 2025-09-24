@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { DaytonaClient, createSandboxWrapper } from "@/lib/daytona-client";
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -39,28 +40,12 @@ export async function POST(req: NextRequest) {
 
     console.log(`[FORCE-START] Force starting sandbox: ${sandboxId}`);
 
-    // Dynamic import to avoid ESM issues during build
-    console.log('[FORCE-START] Importing Daytona SDK...');
-    let Daytona;
-    try {
-      const daytonaModule = await import('@daytonaio/sdk');
-      Daytona = daytonaModule.Daytona || daytonaModule.default?.Daytona || daytonaModule.default;
-      console.log('[FORCE-START] Daytona SDK imported successfully');
-      console.log('[FORCE-START] Daytona constructor available:', !!Daytona);
-    } catch (importError: any) {
-      console.error('[FORCE-START] Failed to import Daytona SDK:', {
-        message: importError.message,
-        code: importError.code,
-        stack: importError.stack
-      });
-      throw new Error(`Failed to import Daytona SDK: ${importError.message}`);
-    }
-
-    console.log('[FORCE-START] Initializing Daytona client...');
-    const daytona = new Daytona({
-      apiKey: process.env.DAYTONA_API_KEY,
+    // Use our custom Daytona client instead of the problematic SDK
+    console.log('[FORCE-START] Initializing custom Daytona client...');
+    const daytona = new DaytonaClient({
+      apiKey: process.env.DAYTONA_API_KEY!,
     });
-    console.log('[FORCE-START] Daytona client initialized');
+    console.log('[FORCE-START] Custom Daytona client initialized');
 
     // Get sandbox details
     console.log('[FORCE-START] Listing sandboxes to find target...');
@@ -94,10 +79,13 @@ export async function POST(req: NextRequest) {
     let startSuccess = false;
     let lastError = null;
 
+    // Create a wrapper for the sandbox to maintain compatibility
+    const sandboxWrapper = createSandboxWrapper(sandbox, daytona);
+
     // Approach 1: Regular start
     try {
       console.log(`[FORCE-START] Trying regular start...`);
-      await sandbox.start();
+      await sandboxWrapper.start();
       startSuccess = true;
       console.log(`[FORCE-START] Regular start command sent`);
     } catch (error) {
@@ -105,29 +93,15 @@ export async function POST(req: NextRequest) {
       lastError = error;
     }
 
-    // Approach 2: Try to delete and recreate (if regular start fails)
+    // Approach 2: Try alternative start methods (if regular start fails)
     if (!startSuccess) {
       try {
         console.log(`[FORCE-START] Trying alternative start methods...`);
-        
-        // Check if there are any other methods available on the sandbox
-        console.log(`[FORCE-START] Available methods on sandbox:`, Object.getOwnPropertyNames(sandbox));
-        console.log(`[FORCE-START] Sandbox constructor:`, sandbox.constructor.name);
-        
-        // Try calling start again with different approach
-        if (typeof (sandbox as any).restart === 'function') {
-          console.log(`[FORCE-START] Trying restart method...`);
-          await (sandbox as any).restart();
-          startSuccess = true;
-        } else if (typeof (sandbox as any).wake === 'function') {
-          console.log(`[FORCE-START] Trying wake method...`);
-          await (sandbox as any).wake();
-          startSuccess = true;
-        } else {
-          // Try start again
-          await sandbox.start();
-          startSuccess = true;
-        }
+
+        // Try start again with our client
+        await daytona.startSandbox(sandboxId);
+        startSuccess = true;
+        console.log(`[FORCE-START] Alternative start method succeeded`);
       } catch (error) {
         console.log(`[FORCE-START] Alternative methods failed: ${error}`);
         lastError = error;
@@ -169,8 +143,8 @@ export async function POST(req: NextRequest) {
           for (let previewAttempt = 0; previewAttempt < 5; previewAttempt++) {
             try {
               await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
-              const testPreview = await updatedSandbox?.getPreviewLink(3000);
-              
+              const testPreview = await daytona.getPreviewLink(sandboxId, 3000);
+
               if (testPreview?.url) {
                 console.log(`[FORCE-START] SUCCESS! Preview URL obtained: ${testPreview.url}`);
                 runningSandbox = updatedSandbox;
@@ -207,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get final preview URL
-    const preview = await runningSandbox.getPreviewLink(3000);
+    const preview = await daytona.getPreviewLink(sandboxId, 3000);
 
     return new Response(
       JSON.stringify({ 

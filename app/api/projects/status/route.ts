@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { DaytonaClient, createSandboxWrapper } from "@/lib/daytona-client";
 
 export const dynamic = 'force-dynamic';
 
@@ -42,31 +43,32 @@ export async function GET(req: NextRequest) {
 
     console.log(`[API] Checking status for sandbox: ${sandboxId}`);
 
-    // Dynamic import to avoid ESM issues during build
-    console.log('[API] Importing Daytona SDK...');
-    let Daytona;
+    // Try the original SDK first, fall back to custom client if it fails
+    let daytona: any = null;
+    let usingCustomClient = false;
+
     try {
-      const daytonaModule = await import('@daytonaio/sdk');
-      Daytona = daytonaModule.Daytona || daytonaModule.default?.Daytona || daytonaModule.default;
-      console.log('[API] Daytona SDK imported successfully');
-      console.log('[API] Daytona constructor available:', !!Daytona);
-    } catch (importError: any) {
-      console.error('[API] Failed to import Daytona SDK:', {
-        message: importError.message,
-        code: importError.code,
-        stack: importError.stack
+      console.log('[API] Attempting to use original Daytona SDK...');
+      const { Daytona } = await import('@daytonaio/sdk');
+      daytona = new Daytona({
+        apiKey: process.env.DAYTONA_API_KEY!,
       });
-      throw new Error(`Failed to import Daytona SDK: ${importError.message}`);
+      console.log('[API] Original Daytona SDK loaded successfully');
+    } catch (sdkError: any) {
+      console.log('[API] Original SDK failed, using custom client...', {
+        error: sdkError.message,
+        code: sdkError.code
+      });
+
+      daytona = new DaytonaClient({
+        apiKey: process.env.DAYTONA_API_KEY!,
+      });
+      usingCustomClient = true;
+      console.log('[API] Custom Daytona client initialized');
     }
 
-    console.log('[API] Initializing Daytona client...');
-    const daytona = new Daytona({
-      apiKey: process.env.DAYTONA_API_KEY,
-    });
-    console.log('[API] Daytona client initialized');
-
     // Get all sandboxes and log them for debugging
-    console.log('[API] Attempting to list sandboxes...');
+    console.log(`[API] Attempting to list sandboxes using ${usingCustomClient ? 'custom client' : 'original SDK'}...`);
     const listStartTime = Date.now();
     const sandboxes = await daytona.list();
     const listDuration = Date.now() - listStartTime;
@@ -111,7 +113,15 @@ export async function GET(req: NextRequest) {
       try {
         console.log(`[API] Sandbox is online, attempting to get preview URL...`);
         const previewStartTime = Date.now();
-        const preview = await sandbox.getPreviewLink(3000);
+
+        let preview = null;
+        if (usingCustomClient) {
+          preview = await daytona.getPreviewLink(sandboxId, 3000);
+        } else {
+          // Using original SDK
+          preview = await sandbox.getPreviewLink(3000);
+        }
+
         const previewDuration = Date.now() - previewStartTime;
         previewUrl = preview?.url || null;
         console.log(`[API] Preview URL retrieved in ${previewDuration}ms: ${previewUrl}`);
