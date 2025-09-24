@@ -87,13 +87,13 @@ export async function GET(req: NextRequest) {
         createdAt: workspace.created_at,
         memberCount: members.length,
         projectCount: projects.length,
-        recentProjects: projects.slice(0, 5).map(project => ({
+        recentProjects: projects.slice(0, 5).map((project: any) => ({ // Fixed TypeScript implicit any error
           id: project.id,
           name: project.name,
           status: project.status,
           createdAt: project.created_at,
         })),
-        members: members.map(member => ({
+        members: members.map((member: any) => ({
           id: member.id,
           role: member.role,
           joinedAt: member.joined_at,

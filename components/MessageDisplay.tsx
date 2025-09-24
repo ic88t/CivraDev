@@ -1,5 +1,12 @@
-import { type SDKMessage } from "@anthropic-ai/claude-code";
 import { useState, useEffect } from "react";
+
+// Local type definition to replace the Claude Code SDK import
+interface SDKMessage {
+  type: string;
+  name?: string;
+  input?: any;
+  content?: string;
+}
 
 interface MessageDisplayProps {
   messages: SDKMessage[];
