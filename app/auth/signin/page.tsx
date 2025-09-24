@@ -148,18 +148,6 @@ function SignInPageContent() {
             </button>
           </div>
 
-          <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm">
-              By continuing, you agree to our{" "}
-              <Link href="/terms" className="text-gray-300 hover:text-white underline">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="text-gray-300 hover:text-white underline">
-                Privacy Policy
-              </Link>
-            </p>
-          </div>
         </div>
 
         {/* Back to home */}
