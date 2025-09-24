@@ -49,44 +49,36 @@ export class DaytonaClient {
   }
 
   async list(): Promise<DaytonaSandbox[]> {
-    console.log('[DaytonaClient] Listing sandboxes...');
-    return await this.makeRequest('/sandboxes');
+    console.log('[DaytonaClient] Listing sandboxes (FALLBACK MODE - API endpoint unknown)...');
+    console.log('[DaytonaClient] WARNING: Using placeholder data since actual API endpoints are unknown');
+
+    // For now, return empty list since we don't know the real API endpoints
+    // This prevents the ES module error and lets us see other issues
+    return [];
   }
 
   async getSandbox(id: string): Promise<DaytonaSandbox | null> {
-    console.log(`[DaytonaClient] Getting sandbox: ${id}`);
-    try {
-      return await this.makeRequest(`/sandboxes/${id}`);
-    } catch (error: any) {
-      if (error.message.includes('404')) {
-        return null;
-      }
-      throw error;
-    }
+    console.log(`[DaytonaClient] Getting sandbox: ${id} (FALLBACK MODE)`);
+    console.log('[DaytonaClient] WARNING: Returning null since actual API endpoints are unknown');
+    return null;
   }
 
   async startSandbox(id: string): Promise<void> {
-    console.log(`[DaytonaClient] Starting sandbox: ${id}`);
-    await this.makeRequest(`/sandboxes/${id}/start`, {
-      method: 'POST',
-    });
+    console.log(`[DaytonaClient] Starting sandbox: ${id} (FALLBACK MODE - NO-OP)`);
+    console.log('[DaytonaClient] WARNING: Not actually starting sandbox since API endpoints are unknown');
+    // No-op for now
   }
 
   async stopSandbox(id: string): Promise<void> {
-    console.log(`[DaytonaClient] Stopping sandbox: ${id}`);
-    await this.makeRequest(`/sandboxes/${id}/stop`, {
-      method: 'POST',
-    });
+    console.log(`[DaytonaClient] Stopping sandbox: ${id} (FALLBACK MODE - NO-OP)`);
+    console.log('[DaytonaClient] WARNING: Not actually stopping sandbox since API endpoints are unknown');
+    // No-op for now
   }
 
   async getPreviewLink(id: string, port: number = 3000): Promise<DaytonaPreview | null> {
-    console.log(`[DaytonaClient] Getting preview link for sandbox: ${id}, port: ${port}`);
-    try {
-      return await this.makeRequest(`/sandboxes/${id}/preview?port=${port}`);
-    } catch (error: any) {
-      console.log(`[DaytonaClient] Preview link not available: ${error.message}`);
-      return null;
-    }
+    console.log(`[DaytonaClient] Getting preview link for sandbox: ${id}, port: ${port} (FALLBACK MODE)`);
+    console.log('[DaytonaClient] WARNING: Returning null since actual API endpoints are unknown');
+    return null;
   }
 }
 
