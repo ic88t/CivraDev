@@ -29,7 +29,7 @@ export default function MessageDisplay({ messages }: MessageDisplayProps) {
         const match = path.match(/\/app\/([^\/]+)\//);
         return match ? `/${match[1]}` : null;
       })
-      .filter(Boolean);
+      .filter((page): page is string => page !== null);
     
     setGeneratedPages(Array.from(new Set(pages)));
   }, [messages]);
