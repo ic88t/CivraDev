@@ -48,9 +48,9 @@ export default function Navbar() {
           className="flex items-center gap-2 text-2xl font-semibold text-white hover:opacity-90 transition-opacity"
         >
           <img 
-            src="/civra.png" 
+            src="/CivraLogoBig.png" 
             alt="Civra Logo" 
-            className="w-12 h-12"
+            className="w-24 h-14"
           />
           Civra
         </Link>
