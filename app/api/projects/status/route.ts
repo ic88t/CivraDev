@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'; // Ensure we use Node.js runtime, not Edge
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();

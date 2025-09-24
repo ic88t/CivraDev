@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { DaytonaClient, createSandboxWrapper } from "@/lib/daytona-client";
+
+export const runtime = 'nodejs'; // Ensure we use Node.js runtime, not Edge
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -40,12 +41,15 @@ export async function POST(req: NextRequest) {
 
     console.log(`[FORCE-START] Force starting sandbox: ${sandboxId}`);
 
-    // Use our custom Daytona client instead of the problematic SDK
-    console.log('[FORCE-START] Initializing custom Daytona client...');
-    const daytona = new DaytonaClient({
+    // Load Daytona SDK with package override fixing ES module issues
+    console.log('[FORCE-START] Loading Daytona SDK (with untildify@4 override)...');
+
+    const { Daytona } = await import('@daytonaio/sdk');
+    const daytona = new Daytona({
       apiKey: process.env.DAYTONA_API_KEY!,
     });
-    console.log('[FORCE-START] Custom Daytona client initialized');
+
+    console.log('[FORCE-START] Daytona SDK loaded successfully');
 
     // Get sandbox details
     console.log('[FORCE-START] Listing sandboxes to find target...');
@@ -79,13 +83,10 @@ export async function POST(req: NextRequest) {
     let startSuccess = false;
     let lastError = null;
 
-    // Create a wrapper for the sandbox to maintain compatibility
-    const sandboxWrapper = createSandboxWrapper(sandbox, daytona);
-
-    // Approach 1: Regular start
+    // Approach 1: Regular start using original SDK
     try {
       console.log(`[FORCE-START] Trying regular start...`);
-      await sandboxWrapper.start();
+      await sandbox.start();
       startSuccess = true;
       console.log(`[FORCE-START] Regular start command sent`);
     } catch (error) {
@@ -98,9 +99,24 @@ export async function POST(req: NextRequest) {
       try {
         console.log(`[FORCE-START] Trying alternative start methods...`);
 
-        // Try start again with our client
-        await daytona.startSandbox(sandboxId);
-        startSuccess = true;
+        // Check if there are any other methods available on the sandbox
+        console.log(`[FORCE-START] Available methods on sandbox:`, Object.getOwnPropertyNames(sandbox));
+        console.log(`[FORCE-START] Sandbox constructor:`, sandbox.constructor.name);
+
+        // Try calling start again with different approach
+        if (typeof (sandbox as any).restart === 'function') {
+          console.log(`[FORCE-START] Trying restart method...`);
+          await (sandbox as any).restart();
+          startSuccess = true;
+        } else if (typeof (sandbox as any).wake === 'function') {
+          console.log(`[FORCE-START] Trying wake method...`);
+          await (sandbox as any).wake();
+          startSuccess = true;
+        } else {
+          // Try start again
+          await sandbox.start();
+          startSuccess = true;
+        }
         console.log(`[FORCE-START] Alternative start method succeeded`);
       } catch (error) {
         console.log(`[FORCE-START] Alternative methods failed: ${error}`);
@@ -143,7 +159,7 @@ export async function POST(req: NextRequest) {
           for (let previewAttempt = 0; previewAttempt < 5; previewAttempt++) {
             try {
               await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
-              const testPreview = await daytona.getPreviewLink(sandboxId, 3000);
+              const testPreview = await updatedSandbox?.getPreviewLink(3000);
 
               if (testPreview?.url) {
                 console.log(`[FORCE-START] SUCCESS! Preview URL obtained: ${testPreview.url}`);
@@ -181,7 +197,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get final preview URL
-    const preview = await daytona.getPreviewLink(sandboxId, 3000);
+    const preview = await runningSandbox.getPreviewLink(3000);
 
     return new Response(
       JSON.stringify({ 
