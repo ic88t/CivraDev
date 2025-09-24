@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase-client";
@@ -16,7 +16,7 @@ interface Message {
   sandboxId?: string;
 }
 
-export default function GeneratePage() {
+function GeneratePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const prompt = searchParams.get("prompt") || "";
@@ -489,7 +489,7 @@ export default function GeneratePage() {
       <Navbar />
       {/* Spacer for navbar */}
       <div className="h-16" />
-      
+
       <div className="flex-1 flex overflow-hidden">
         {/* Left side - Chat */}
         <div className="w-[30%] flex flex-col border-r border-gray-800">
@@ -773,5 +773,13 @@ export default function GeneratePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function GeneratePage() {
+  return (
+    <Suspense fallback={<div className="h-screen bg-black flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div></div>}>
+      <GeneratePageContent />
+    </Suspense>
   );
 }
