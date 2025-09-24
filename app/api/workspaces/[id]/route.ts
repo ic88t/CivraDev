@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getCurrentUser, getCurrentUserFromRequest, requireAuth } from "@/lib/auth-utils";
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { prisma } from '@/lib/prisma';
+export const dynamic = 'force-dynamic';
 
 // Create server-side Supabase client
 function createSupabaseServer() {
@@ -23,6 +23,10 @@ function createSupabaseServer() {
 
 // GET /api/workspaces/[id] - Get workspace details
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  return new Response(
+    JSON.stringify({ error: "Workspace management not implemented yet" }),
+    { status: 501, headers: { "Content-Type": "application/json" } }
+  );
   try {
     const user = await requireAuth();
     const workspaceId = params.id;
@@ -138,6 +142,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // PUT /api/workspaces/[id] - Update workspace
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  return new Response(
+    JSON.stringify({ error: "Workspace management not implemented yet" }),
+    { status: 501, headers: { "Content-Type": "application/json" } }
+  );
   try {
     const user = await requireAuth();
     const { name, description } = await req.json();
@@ -229,6 +237,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 // DELETE /api/workspaces/[id] - Delete workspace
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  return new Response(
+    JSON.stringify({ error: "Workspace management not implemented yet" }),
+    { status: 501, headers: { "Content-Type": "application/json" } }
+  );
+}
   try {
     const user = await requireAuth();
     const workspaceId = params.id;
