@@ -28,7 +28,24 @@ function createSupabaseAdmin() {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
+  const error = searchParams.get('error')
+  const errorDescription = searchParams.get('error_description')
   const next = searchParams.get('next') ?? '/'
+
+  console.log('[API Auth] Callback request details:', {
+    url: request.url,
+    code: code ? 'Present' : 'Missing',
+    error,
+    errorDescription,
+    allParams: Object.fromEntries(searchParams.entries()),
+    origin: request.nextUrl.origin
+  })
+
+  // Handle OAuth errors
+  if (error) {
+    console.error('[API Auth] OAuth error:', { error, errorDescription })
+    return Response.redirect(`${request.nextUrl.origin}/auth/signin?error=${encodeURIComponent(errorDescription || error)}`)
+  }
 
   if (code) {
     const cookieStore = cookies()

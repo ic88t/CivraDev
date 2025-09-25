@@ -6,31 +6,31 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    console.log('[Usage API] Starting request...');
+    // console.log('[Usage API] Starting request...');
     
     // Try to get user from request first, then fallback to cookies
     let user = await getCurrentUserFromRequest(req);
 
     if (!user) {
-      console.log('[Usage API] No user from request, trying getCurrentUser...');
+      // console.log('[Usage API] No user from request, trying getCurrentUser...');
       user = await getCurrentUser();
     }
 
     if (!user?.email) {
-      console.log('[Usage API] No authenticated user found');
+      // console.log('[Usage API] No authenticated user found');
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[Usage API] Fetching usage stats for user: ${user.email} (ID: ${user.id})`);
+    // console.log(`[Usage API] Fetching usage stats for user: ${user.email} (ID: ${user.id})`);
 
     // Get usage statistics with error handling
-    console.log('[Usage API] Calling getCreditUsageStats...');
+    // console.log('[Usage API] Calling getCreditUsageStats...');
     const usageStats = await getCreditUsageStats(user.id);
     if (!usageStats) {
-      console.error('[Usage API] getCreditUsageStats returned null');
+      // console.error('[Usage API] getCreditUsageStats returned null');
       // Return default values instead of failing
       const defaultStats = {
         credits: {
@@ -70,14 +70,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Get user's plan
-    console.log('[Usage API] Calling getUserPlan...');
+    // console.log('[Usage API] Calling getUserPlan...');
     const plan = await getUserPlan(user.id);
-    console.log(`[Usage API] User plan: ${plan}`);
+    // console.log(`[Usage API] User plan: ${plan}`);
 
     // Get project limits (especially for free users)
-    console.log('[Usage API] Calling getProjectLimits...');
+    // console.log('[Usage API] Calling getProjectLimits...');
     const projectLimits = await getProjectLimits(user.id);
-    console.log(`[Usage API] Project limits:`, projectLimits);
+    // console.log(`[Usage API] Project limits:`, projectLimits);
 
     const response = {
       ...usageStats,
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
       }
     };
 
-    console.log('[Usage API] Returning successful response');
+    // console.log('[Usage API] Returning successful response');
     return new Response(
       JSON.stringify(response),
       {
@@ -99,8 +99,8 @@ export async function GET(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error("[Usage API] Error:", error);
-    console.error("[Usage API] Error stack:", error.stack);
+    // console.error("[Usage API] Error:", error);
+    // console.error("[Usage API] Error stack:", error.stack);
     
     // Return a more detailed error response
     return new Response(
