@@ -2,6 +2,7 @@ import { Daytona } from "@daytonaio/sdk";
 import * as dotenv from "dotenv";
 import * as path from "path";
 import * as fs from "fs";
+import { chatLog, debugLog, sendClaudeMessage } from "./chat-logger";
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -30,7 +31,8 @@ function parseCivraResponse(responseText: string): FileOperation[] {
   // Extract <dec-code> block
   const decCodeMatch = responseText.match(/<dec-code>([\s\S]*?)<\/dec-code>/);
   if (!decCodeMatch) {
-    console.log("No <dec-code> block found in response");
+    console.error("No <dec-code> block found in response");
+    console.error("Response preview:", responseText.substring(0, 500));
     return operations;
   }
 
@@ -141,10 +143,10 @@ async function generateWithCivra(
   sandboxIdArg?: string,
   prompt?: string
 ) {
-  console.log("🚀 Starting Civra-based website generation...\n");
+  debugLog("🚀 Starting Civra-based website generation...\n");
 
   if (!process.env.DAYTONA_API_KEY || !process.env.ANTHROPIC_API_KEY) {
-    console.error("ERROR: DAYTONA_API_KEY and ANTHROPIC_API_KEY must be set");
+    debugLog("ERROR: DAYTONA_API_KEY and ANTHROPIC_API_KEY must be set");
     process.exit(1);
   }
 
@@ -158,21 +160,23 @@ async function generateWithCivra(
   try {
     // Step 1: Create or get sandbox
     if (sandboxId) {
-      console.log(`1. Using existing sandbox: ${sandboxId}`);
+      debugLog(`1. Using existing sandbox: ${sandboxId}`);
+      chatLog("🔄 Connecting to your project...");
       const sandboxes = await daytona.list();
       sandbox = sandboxes.find((s: any) => s.id === sandboxId);
       if (!sandbox) {
         throw new Error(`Sandbox ${sandboxId} not found`);
       }
-      console.log(`✓ Connected to sandbox: ${sandbox.id}`);
+      debugLog(`✓ Connected to sandbox: ${sandbox.id}`);
     } else {
-      console.log("1. Creating new Daytona sandbox...");
+      debugLog("1. Creating new Daytona sandbox...");
+      chatLog("⚙️ Setting up your development environment...");
       sandbox = await daytona.create({
         public: true,
         image: "node:20",
       });
       sandboxId = sandbox.id;
-      console.log(`✓ Sandbox created: ${sandboxId}`);
+      debugLog(`✓ Sandbox created: ${sandboxId}`);
     }
 
     // Get the root directory
@@ -180,7 +184,7 @@ async function generateWithCivra(
     const projectDir = `${rootDir}/website-project`;
 
     // Step 2: Setup or check project directory
-    console.log("\n2. Setting up project...");
+    debugLog("\n2. Setting up project...");
     const projectExists = await sandbox.process.executeCommand(
       `test -d website-project && echo "exists" || echo "not found"`,
       rootDir
@@ -190,13 +194,13 @@ async function generateWithCivra(
 
     if (!isExistingProject) {
       await sandbox.process.executeCommand(`mkdir -p ${projectDir}`, rootDir);
-      console.log(`✓ Created project directory: ${projectDir}`);
+      debugLog(`✓ Created project directory: ${projectDir}`);
     } else {
-      console.log(`✓ Using existing project: ${projectDir}`);
+      debugLog(`✓ Using existing project: ${projectDir}`);
     }
 
     // Step 3: Build context from existing files
-    console.log("\n3. Reading project context...");
+    debugLog("\n3. Reading project context...");
     let codeContext = "## Allowed files\nYou are allowed to modify the following files:\n\n";
 
     const allowedFiles = [
@@ -221,7 +225,7 @@ async function generateWithCivra(
 
       if (fileContent.result && fileContent.result.trim().length > 0) {
         codeContext += `${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
-        console.log(`  Found: ${file}`);
+        debugLog(`  Found: ${file}`);
       }
     }
 
@@ -234,8 +238,8 @@ async function generateWithCivra(
       : CIVRA_PROMPT;
 
     // Step 4: Generate with Claude using Civra prompt
-    console.log(`\n4. Generating with Civra prompt...`);
-    console.log(`Prompt: "${prompt}"\n`);
+    debugLog(`\n4. Generating with Civra prompt...`);
+    debugLog(`Prompt: "${prompt}"\n`);
 
     const userPrompt = isExistingProject
       ? `${prompt}\n\nNote: This is an existing project. Please analyze the current files and make appropriate modifications.`
@@ -243,14 +247,29 @@ async function generateWithCivra(
 
     const response = await callClaude(systemPrompt, userPrompt);
 
-    console.log("\n[Claude Response - Full]:");
-    console.log(response);
-    console.log("\n[Claude Response - End]\n");
-    console.log("__CLAUDE_MESSAGE__", JSON.stringify({ type: "assistant", content: response }));
+    // Extract clean chat messages (text outside <dec-code> blocks)
+    // Split response into parts before, during, and after <dec-code>
+    const beforeCodeMatch = response.match(/^([\s\S]*?)<dec-code>/);
+    const afterCodeMatch = response.match(/<\/dec-code>([\s\S]*)$/);
+
+    const introMessage = beforeCodeMatch && beforeCodeMatch[1].trim();
+    const completionMessage = afterCodeMatch && afterCodeMatch[1].trim();
+
+    // Send intro message first
+    if (introMessage) {
+      sendClaudeMessage(introMessage);
+    }
 
     // Step 5: Parse and execute operations
     const operations = parseCivraResponse(response);
-    console.log(`\n5. Executing ${operations.length} file operations...\n`);
+    debugLog(`\n5. Executing ${operations.length} file operations...\n`);
+
+    if (operations.length === 0) {
+      debugLog("WARNING: No operations found! Check if Claude response contains <dec-code> block");
+      debugLog("Response length:", response.length);
+    } else {
+      chatLog("🔧 Generating project files...");
+    }
 
     for (const op of operations) {
       try {
@@ -267,60 +286,41 @@ async function generateWithCivra(
             projectDir
           );
 
-          console.log(`  ✓ Wrote: ${op.filePath}`);
-          console.log("__TOOL_USE__", JSON.stringify({
-            type: "tool_use",
-            name: "write",
-            input: { file_path: op.filePath }
-          }));
+          debugLog(`  ✓ Wrote: ${op.filePath}`);
         } else if (op.type === "delete" && op.filePath) {
           await sandbox.process.executeCommand(`rm -f ${op.filePath}`, projectDir);
-          console.log(`  ✓ Deleted: ${op.filePath}`);
-          console.log("__TOOL_USE__", JSON.stringify({
-            type: "tool_use",
-            name: "delete",
-            input: { file_path: op.filePath }
-          }));
+          debugLog(`  ✓ Deleted: ${op.filePath}`);
         } else if (op.type === "rename" && op.originalPath && op.newPath) {
           await sandbox.process.executeCommand(
             `mv ${op.originalPath} ${op.newPath}`,
             projectDir
           );
-          console.log(`  ✓ Renamed: ${op.originalPath} -> ${op.newPath}`);
-          console.log("__TOOL_USE__", JSON.stringify({
-            type: "tool_use",
-            name: "rename",
-            input: { original_path: op.originalPath, new_path: op.newPath }
-          }));
+          debugLog(`  ✓ Renamed: ${op.originalPath} -> ${op.newPath}`);
         } else if (op.type === "add-dependency" && op.package) {
-          console.log(`  Installing: ${op.package}...`);
+          debugLog(`  Installing: ${op.package}...`);
           await sandbox.process.executeCommand(
             `npm install ${op.package}`,
             projectDir,
             undefined,
             180000 // 3 min timeout
           );
-          console.log(`  ✓ Installed: ${op.package}`);
-          console.log("__TOOL_USE__", JSON.stringify({
-            type: "tool_use",
-            name: "add-dependency",
-            input: { package: op.package }
-          }));
+          debugLog(`  ✓ Installed: ${op.package}`);
         }
       } catch (opError) {
-        console.error(`  ✗ Failed to execute operation:`, opError);
+        debugLog(`  ✗ Failed to execute operation:`, opError);
       }
     }
 
     // Step 6: Install dependencies if package.json exists
-    console.log("\n6. Installing dependencies...");
+    debugLog("\n6. Installing dependencies...");
+    chatLog("📦 Installing dependencies...");
     const hasPackageJson = await sandbox.process.executeCommand(
       `test -f package.json && echo "yes" || echo "no"`,
       projectDir
     );
 
     if (hasPackageJson.result?.trim() === "yes") {
-      console.log("Running npm install...");
+      debugLog("Running npm install...");
       const npmInstall = await sandbox.process.executeCommand(
         "npm install --legacy-peer-deps",
         projectDir,
@@ -329,16 +329,17 @@ async function generateWithCivra(
       );
 
       if (npmInstall.exitCode === 0) {
-        console.log("✓ Dependencies installed");
+        debugLog("✓ Dependencies installed");
       } else {
-        console.log("⚠️  npm install had issues:");
-        console.log(npmInstall.result?.substring(0, 500));
+        debugLog("⚠️  npm install had issues:");
+        debugLog(npmInstall.result?.substring(0, 500));
         throw new Error("npm install failed. Check the logs above.");
       }
     }
 
     // Step 7: Start dev server
-    console.log("\n7. Starting development server...");
+    debugLog("\n7. Starting development server...");
+    chatLog("▶️ Starting development server...");
 
     // Kill any existing servers
     await sandbox.process.executeCommand(
@@ -353,24 +354,30 @@ async function generateWithCivra(
       { PORT: "3000" }
     );
 
-    console.log("✓ Server started in background");
+    debugLog("✓ Server started in background");
 
     // Wait for server
-    console.log("Waiting for server to start...");
+    debugLog("Waiting for server to start...");
     await new Promise((resolve) => setTimeout(resolve, 8000));
 
     // Step 8: Get preview URL
-    console.log("\n8. Getting preview URL...");
+    debugLog("\n8. Getting preview URL...");
     const preview = await sandbox.getPreviewLink(3000);
 
-    console.log("\n✨ SUCCESS! Website generated with Civra!");
-    console.log("\n📊 SUMMARY:");
-    console.log("===========");
+    debugLog("\n✨ SUCCESS! Website generated with Civra!");
+    debugLog("\n📊 SUMMARY:");
+    debugLog("===========");
+    debugLog(`Sandbox ID: ${sandboxId}`);
+    debugLog(`Preview URL: ${preview.url}`);
+
+    // Send completion message to user
+    if (completionMessage) {
+      sendClaudeMessage(completionMessage);
+    }
+
+    // Output structured data for API to capture (stdout)
     console.log(`Sandbox ID: ${sandboxId}`);
     console.log(`Preview URL: ${preview.url}`);
-
-    console.log("\n🌐 VISIT YOUR WEBSITE:");
-    console.log(preview.url);
 
     return {
       success: true,
@@ -405,21 +412,21 @@ async function main() {
     prompt = "Create a modern Next.js website with a clean design";
   }
 
-  console.log("📝 Configuration:");
-  console.log(`- Sandbox: ${sandboxId ? `Using ${sandboxId}` : "Creating new"}`);
-  console.log(`- Prompt: ${prompt}`);
-  console.log();
+  debugLog("📝 Configuration:");
+  debugLog(`- Sandbox: ${sandboxId ? `Using ${sandboxId}` : "Creating new"}`);
+  debugLog(`- Prompt: ${prompt}`);
+  debugLog("");
 
   try {
     await generateWithCivra(sandboxId, prompt);
   } catch (error) {
-    console.error("Failed to generate:", error);
+    debugLog("Failed to generate:", error);
     process.exit(1);
   }
 }
 
 process.on("SIGINT", () => {
-  console.log("\n\n👋 Exiting...");
+  debugLog("\n\n👋 Exiting...");
   process.exit(0);
 });
 

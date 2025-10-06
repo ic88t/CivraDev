@@ -671,6 +671,7 @@ function GeneratePageContent() {
                     src={previewUrl}
                     className="w-full h-[calc(100%-2rem)] border-0"
                     title="Website Preview"
+                    sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                   />
                 </div>
               )}
