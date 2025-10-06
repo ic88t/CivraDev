@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { trackUsageWithCredits, hasCredits } from "@/lib/credits";
 import { getCurrentUserFromRequest, getCurrentUser } from "@/lib/auth-utils";
 import { parseCivraResponse, hasCodeOperations } from "@/lib/civra-parser";
+import { createClient } from '@supabase/supabase-js';
 import fs from "fs";
 import path from "path";
 
@@ -10,6 +11,30 @@ const CIVRA_PROMPT = fs.readFileSync(
   path.join(process.cwd(), "lib", "civra-agent-prompt.md"),
   "utf-8"
 );
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Helper to save chat message
+async function saveChatMessage(
+  projectId: string,
+  role: 'user' | 'assistant' | 'system',
+  content: string
+) {
+  try {
+    await supabase.from('chat_messages').insert([
+      {
+        project_id: projectId,
+        role,
+        content,
+      },
+    ]);
+  } catch (error) {
+    console.error('[saveChatMessage] Error:', error);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {

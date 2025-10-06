@@ -6,6 +6,26 @@ import { trackUsageWithCredits, hasCredits, canCreateProject } from "@/lib/credi
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+// Helper to save chat message
+async function saveChatMessage(
+  supabase: any,
+  projectId: string,
+  role: 'user' | 'assistant' | 'system',
+  content: string
+) {
+  try {
+    await supabase.from('chat_messages').insert([
+      {
+        project_id: projectId,
+        role,
+        content,
+      },
+    ]);
+  } catch (error) {
+    console.error('[saveChatMessage] Error:', error);
+  }
+}
+
 // Function to generate a clean project summary from the prompt
 async function generateProjectSummary(prompt: string): Promise<string> {
   try {
@@ -203,27 +223,50 @@ export async function POST(req: NextRequest) {
         let extractedSandboxId = "";
         let previewUrl = "";
         let buffer = "";
-        
+        let currentProjectId = "";
+
+        // Save initial user prompt if this is a new project
+        if (!sandboxId) {
+          // We'll save it after we create the project and get the ID
+        } else {
+          // For existing projects, get the project ID and save the user message
+          const { data: existingProject } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('sandbox_id', sandboxId)
+            .single();
+
+          if (existingProject) {
+            currentProjectId = existingProject.id;
+            await saveChatMessage(supabase, currentProjectId, 'user', prompt);
+          }
+        }
+
         // Capture stdout
         child.stdout.on("data", async (data) => {
           buffer += data.toString();
           const lines = buffer.split('\n');
           buffer = lines.pop() || ""; // Keep incomplete line in buffer
-          
+
           for (const line of lines) {
             if (!line.trim()) continue;
-            
+
             // Parse Claude messages
             if (line.includes('__CLAUDE_MESSAGE__')) {
               const jsonStart = line.indexOf('__CLAUDE_MESSAGE__') + '__CLAUDE_MESSAGE__'.length;
               try {
                 const message = JSON.parse(line.substring(jsonStart).trim());
                 await writer.write(
-                  encoder.encode(`data: ${JSON.stringify({ 
-                    type: "claude_message", 
-                    content: message.content 
+                  encoder.encode(`data: ${JSON.stringify({
+                    type: "claude_message",
+                    content: message.content
                   })}\n\n`)
                 );
+
+                // Save Claude message to database if we have a project ID
+                if (currentProjectId) {
+                  await saveChatMessage(supabase, currentProjectId, 'assistant', message.content);
+                }
               } catch (e) {
                 // Ignore parse errors
               }
@@ -261,21 +304,26 @@ export async function POST(req: NextRequest) {
                 
                 // Send as progress
                 await writer.write(
-                  encoder.encode(`data: ${JSON.stringify({ 
-                    type: "progress", 
-                    message: output 
+                  encoder.encode(`data: ${JSON.stringify({
+                    type: "progress",
+                    message: output
                   })}\n\n`)
                 );
-                
+
+                // Save progress messages as system messages if we have a project ID
+                if (currentProjectId && (output.includes('⚙️') || output.includes('🔧') || output.includes('📦') || output.includes('▶️'))) {
+                  await saveChatMessage(supabase, currentProjectId, 'system', output);
+                }
+
                 // Extract sandbox ID - try multiple patterns
-                const sandboxMatch = output.match(/Sandbox created: ([a-f0-9-]+)/i) || 
+                const sandboxMatch = output.match(/Sandbox created: ([a-f0-9-]+)/i) ||
                                    output.match(/✓ Sandbox created: ([a-f0-9-]+)/i) ||
                                    output.match(/Sandbox ID: ([a-f0-9-]+)/i);
                 if (sandboxMatch) {
                   extractedSandboxId = sandboxMatch[1];
                   console.log(`[API] Captured sandbox ID: ${extractedSandboxId}`);
                 }
-                
+
                 // Extract preview URL
                 const previewMatch = output.match(/Preview URL: (https:\/\/[^\s]+)/);
                 if (previewMatch) {
@@ -328,8 +376,8 @@ export async function POST(req: NextRequest) {
               console.log('[API] Generating project summary...');
               const projectSummary = await generateProjectSummary(prompt);
               console.log(`[API] Generated project summary: ${projectSummary}`);
-              
-              await supabase.from('projects').insert([{
+
+              const { data: newProject } = await supabase.from('projects').insert([{
                 name: projectSummary,
                 description: projectSummary,
                 prompt: prompt,
@@ -339,8 +387,15 @@ export async function POST(req: NextRequest) {
                 user_id: user.id,
                 workspace_id: null,
                 visibility: 'PRIVATE',
-              }]);
+              }]).select().single();
+
               console.log(`[API] Created new project in database: ${projectSummary} (${finalSandboxId})`);
+
+              // Save the initial user prompt message now that we have the project ID
+              if (newProject) {
+                currentProjectId = newProject.id;
+                await saveChatMessage(supabase, newProject.id, 'user', prompt);
+              }
             } catch (dbError) {
               console.error("[API] Failed to save project to database:", dbError);
               // Continue anyway, the sandbox was created successfully
