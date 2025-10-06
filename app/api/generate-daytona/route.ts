@@ -188,8 +188,8 @@ export async function POST(req: NextRequest) {
     // Start the async generation
     (async () => {
       try {
-        // Use the generate-in-daytona.ts script
-        const scriptPath = path.join(process.cwd(), "scripts", "generate-in-daytona.ts");
+        // Use the Civra-based generation script
+        const scriptPath = path.join(process.cwd(), "scripts", "generate-with-civra.ts");
         // Pass sandboxId as first argument if it exists, then the prompt
         const args = sandboxId ? ["tsx", scriptPath, sandboxId, prompt] : ["tsx", scriptPath, prompt];
         const child = spawn("npx", args, {
