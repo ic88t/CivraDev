@@ -1,4 +1,12 @@
 // Web3 tools integration for future use
+
+// Extend Window interface to include ethereum
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export const WEB3_TOOLS = {
   // Wallet connection tools
   connectWallet: async (provider: string) => {
