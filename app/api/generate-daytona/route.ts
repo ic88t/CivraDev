@@ -224,10 +224,12 @@ export async function POST(req: NextRequest) {
         let previewUrl = "";
         let buffer = "";
         let currentProjectId = "";
+        let pendingMessages: Array<{role: 'user' | 'assistant' | 'system', content: string}> = [];
 
         // Save initial user prompt if this is a new project
         if (!sandboxId) {
-          // We'll save it after we create the project and get the ID
+          // Buffer the user message to save later
+          pendingMessages.push({ role: 'user', content: prompt });
         } else {
           // For existing projects, get the project ID and save the user message
           const { data: existingProject } = await supabase
@@ -263,9 +265,11 @@ export async function POST(req: NextRequest) {
                   })}\n\n`)
                 );
 
-                // Save Claude message to database if we have a project ID
+                // Save Claude message to database if we have a project ID, otherwise buffer it
                 if (currentProjectId) {
                   await saveChatMessage(supabase, currentProjectId, 'assistant', message.content);
+                } else {
+                  pendingMessages.push({ role: 'assistant', content: message.content });
                 }
               } catch (e) {
                 // Ignore parse errors
@@ -310,9 +314,13 @@ export async function POST(req: NextRequest) {
                   })}\n\n`)
                 );
 
-                // Save progress messages as system messages if we have a project ID
-                if (currentProjectId && (output.includes('⚙️') || output.includes('🔧') || output.includes('📦') || output.includes('▶️'))) {
-                  await saveChatMessage(supabase, currentProjectId, 'system', output);
+                // Save progress messages as system messages if we have a project ID, otherwise buffer
+                if (output.includes('⚙️') || output.includes('🔧') || output.includes('📦') || output.includes('▶️')) {
+                  if (currentProjectId) {
+                    await saveChatMessage(supabase, currentProjectId, 'system', output);
+                  } else {
+                    pendingMessages.push({ role: 'system', content: output });
+                  }
                 }
 
                 // Extract sandbox ID - try multiple patterns
@@ -391,10 +399,17 @@ export async function POST(req: NextRequest) {
 
               console.log(`[API] Created new project in database: ${projectSummary} (${finalSandboxId})`);
 
-              // Save the initial user prompt message now that we have the project ID
+              // Save all pending messages now that we have the project ID
               if (newProject) {
                 currentProjectId = newProject.id;
-                await saveChatMessage(supabase, newProject.id, 'user', prompt);
+                console.log(`[API] Saving ${pendingMessages.length} pending messages`);
+
+                for (const msg of pendingMessages) {
+                  await saveChatMessage(supabase, newProject.id, msg.role, msg.content);
+                }
+
+                // Clear pending messages
+                pendingMessages = [];
               }
             } catch (dbError) {
               console.error("[API] Failed to save project to database:", dbError);

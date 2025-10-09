@@ -84,6 +84,20 @@ export async function POST(req: NextRequest) {
     console.log(`[CIVRA-CHAT] Continuing chat in sandbox: ${sandboxId}`);
     console.log(`[CIVRA-CHAT] User message: ${message}`);
 
+    // Get project ID from sandbox ID
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('sandbox_id', sandboxId)
+      .single();
+
+    const projectId = project?.id;
+
+    // Save user message
+    if (projectId) {
+      await saveChatMessage(projectId, 'user', message);
+    }
+
     // Track usage and consume credits
     const usageResult = await trackUsageWithCredits(
       user.id,
@@ -291,13 +305,35 @@ export async function POST(req: NextRequest) {
         const responseText = apiResponse.content[0].text.trim();
         console.log("[CIVRA-CHAT] Claude response:", responseText.substring(0, 500));
 
-        // Send the assistant message
-        await safeWrite(
-          `data: ${JSON.stringify({
-            type: "message",
-            content: responseText,
-          })}\n\n`
-        );
+        // Extract clean messages (text outside <dec-code> blocks)
+        const beforeCodeMatch = responseText.match(/^([\s\S]*?)<dec-code>/);
+        const afterCodeMatch = responseText.match(/<\/dec-code>([\s\S]*)$/);
+
+        const cleanMessages: string[] = [];
+        if (beforeCodeMatch && beforeCodeMatch[1].trim()) {
+          cleanMessages.push(beforeCodeMatch[1].trim());
+        }
+        if (afterCodeMatch && afterCodeMatch[1].trim()) {
+          cleanMessages.push(afterCodeMatch[1].trim());
+        }
+
+        // Combine clean messages for database storage
+        const cleanResponse = cleanMessages.join('\n\n');
+
+        // Save only clean response to database (no <dec-code> blocks)
+        if (projectId && cleanResponse) {
+          await saveChatMessage(projectId, 'assistant', cleanResponse);
+        }
+
+        // Send only clean messages to chat UI
+        for (const cleanMsg of cleanMessages) {
+          await safeWrite(
+            `data: ${JSON.stringify({
+              type: "message",
+              content: cleanMsg,
+            })}\n\n`
+          );
+        }
 
         // Parse Civra response
         const parsed = parseCivraResponse(responseText);

@@ -11,15 +11,34 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');
+    const sandboxId = searchParams.get('sandboxId');
 
-    if (!projectId) {
-      return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+    if (!projectId && !sandboxId) {
+      return NextResponse.json({ error: 'projectId or sandboxId is required' }, { status: 400 });
+    }
+
+    let finalProjectId = projectId;
+
+    // If sandboxId provided, look up the project
+    if (sandboxId && !projectId) {
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('sandbox_id', sandboxId)
+        .single();
+
+      if (projectError || !project) {
+        console.error('[Messages API] Project not found for sandbox:', sandboxId, projectError);
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+
+      finalProjectId = project.id;
     }
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
       .select('*')
-      .eq('project_id', projectId)
+      .eq('project_id', finalProjectId)
       .order('created_at', { ascending: true });
 
     if (error) {

@@ -199,43 +199,47 @@ async function generateWithCivra(
       debugLog(`✓ Using existing project: ${projectDir}`);
     }
 
-    // Step 3: Build context from existing files
-    debugLog("\n3. Reading project context...");
-    let codeContext = "## Allowed files\nYou are allowed to modify the following files:\n\n";
+    // Step 3: Build context from existing files (only for existing projects)
+    let systemPrompt = CIVRA_PROMPT;
 
-    const allowedFiles = [
-      "package.json",
-      "tsconfig.json",
-      "next.config.ts",
-      "next.config.js",
-      "app/page.tsx",
-      "app/page.js",
-      "app/layout.tsx",
-      "app/layout.js",
-      "src/layout.tsx",
-      "src/globals.css",
-      "app/globals.css",
-    ];
+    if (isExistingProject) {
+      debugLog("\n3. Reading project context...");
+      let codeContext = "## Current Project Files\n\nHere are the existing files in this project:\n\n";
 
-    for (const file of allowedFiles) {
-      const fileContent = await sandbox.process.executeCommand(
-        `cat ${file} 2>/dev/null || echo ""`,
-        projectDir
-      );
+      const allowedFiles = [
+        "package.json",
+        "tsconfig.json",
+        "next.config.ts",
+        "next.config.js",
+        "app/page.tsx",
+        "app/page.js",
+        "app/layout.tsx",
+        "app/layout.js",
+        "src/layout.tsx",
+        "src/globals.css",
+        "app/globals.css",
+      ];
 
-      if (fileContent.result && fileContent.result.trim().length > 0) {
-        codeContext += `${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
-        debugLog(`  Found: ${file}`);
+      for (const file of allowedFiles) {
+        const fileContent = await sandbox.process.executeCommand(
+          `cat ${file} 2>/dev/null || echo ""`,
+          projectDir
+        );
+
+        if (fileContent.result && fileContent.result.trim().length > 0) {
+          codeContext += `${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
+          debugLog(`  Found: ${file}`);
+        }
       }
-    }
 
-    // Build system prompt with context
-    const systemPrompt = isExistingProject
-      ? CIVRA_PROMPT.replace(
-          "## First Message Instructions",
-          `## Current Project Context\n\n${codeContext}\n\n## First Message Instructions`
-        )
-      : CIVRA_PROMPT;
+      // Build system prompt with context for existing projects
+      systemPrompt = CIVRA_PROMPT.replace(
+        "## First Message Instructions",
+        `## Current Project Context\n\n${codeContext}\n\n## First Message Instructions`
+      );
+    } else {
+      debugLog("\n3. New project - no context needed");
+    }
 
     // Step 4: Generate with Claude using Civra prompt
     debugLog(`\n4. Generating with Civra prompt...`);

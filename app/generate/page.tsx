@@ -7,7 +7,7 @@ import { Send, Loader2, Code2, Eye, Download, Rocket, ChevronLeft, Sparkles, Che
 
 interface Message {
   id: string | number;
-  type: "user" | "bot" | "system";
+  type: "user" | "bot" | "system" | "assistant";
   content: string;
   timestamp?: string;
 }
@@ -49,14 +49,8 @@ function GeneratePageContent() {
     if (isContinuing && continueSandboxId) {
       setSandboxId(continueSandboxId);
       setGenerationCompleted(true);
-      setMessages([
-        {
-          id: 1,
-          type: "system",
-          content: `Continuing project ${continueSandboxId.slice(0, 8)}...`,
-          timestamp: new Date().toLocaleString(),
-        },
-      ]);
+      // Load chat history for this project
+      loadChatHistory(continueSandboxId);
       fetchPreviewUrl(continueSandboxId);
       return;
     }
@@ -81,6 +75,80 @@ function GeneratePageContent() {
     setIsGenerating(true);
     generateWebsite();
   }, [prompt, router, isContinuing, continueSandboxId]);
+
+  const loadChatHistory = async (sandboxId: string) => {
+    try {
+      console.log('[loadChatHistory] Loading history for sandbox:', sandboxId);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const authHeaders: Record<string, string> = {};
+
+      if (session?.access_token) {
+        authHeaders["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      // Use API endpoint to get messages by sandbox ID
+      const messagesResponse = await fetch(`/api/projects/messages?sandboxId=${sandboxId}`, {
+        headers: authHeaders,
+      });
+
+      console.log('[loadChatHistory] Messages response status:', messagesResponse.status);
+
+      if (messagesResponse.ok) {
+        const { messages: chatHistory } = await messagesResponse.json();
+
+        console.log('[loadChatHistory] Loaded messages:', chatHistory?.length || 0);
+
+        if (chatHistory && chatHistory.length > 0) {
+          // Convert to UI message format and filter out <dec-code> blocks
+          const formattedMessages = chatHistory.map((msg: any, index: number) => {
+            let cleanContent = msg.content;
+
+            // Remove any <dec-code> blocks from the content
+            if (cleanContent.includes('<dec-code>')) {
+              const beforeCode = cleanContent.match(/^([\s\S]*?)<dec-code>/)?.[1]?.trim() || '';
+              const afterCode = cleanContent.match(/<\/dec-code>([\s\S]*)$/)?.[1]?.trim() || '';
+              cleanContent = [beforeCode, afterCode].filter(Boolean).join('\n\n');
+            }
+
+            return {
+              id: msg.id || index,
+              type: msg.role, // 'user', 'assistant', or 'system'
+              content: cleanContent,
+              timestamp: new Date(msg.created_at).toLocaleString(),
+            };
+          });
+
+          console.log('[loadChatHistory] Setting formatted messages:', formattedMessages.length);
+          setMessages(formattedMessages);
+        } else {
+          console.log('[loadChatHistory] No messages found, showing default');
+          setMessages([
+            {
+              id: 1,
+              type: "system",
+              content: `Continuing project... No previous messages found.`,
+              timestamp: new Date().toLocaleString(),
+            },
+          ]);
+        }
+      } else {
+        const errorData = await messagesResponse.text();
+        console.error('[loadChatHistory] Error response:', errorData);
+        throw new Error('Failed to fetch messages');
+      }
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+      setMessages([
+        {
+          id: 1,
+          type: "system",
+          content: `Continuing project ${sandboxId.slice(0, 8)}...`,
+          timestamp: new Date().toLocaleString(),
+        },
+      ]);
+    }
+  };
 
   const fetchPreviewUrl = async (sandboxId: string) => {
     try {
@@ -541,7 +609,7 @@ function GeneratePageContent() {
                   {msg.content}
                 </div>
               )}
-              {msg.type === "bot" && (
+              {(msg.type === "bot" || msg.type === "assistant") && (
                 <div className="text-gray-400 leading-relaxed">
                   {msg.content.split('\n').map((line, i) => (
                     <p key={i} className="mb-1">{line}</p>
@@ -550,7 +618,7 @@ function GeneratePageContent() {
               )}
               {msg.type === "system" && (
                 <div className="text-gray-600 flex items-center gap-1.5">
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {isGenerating && <Loader2 className="w-3 h-3 animate-spin" />}
                   <span className="text-xs">{msg.content}</span>
                 </div>
               )}

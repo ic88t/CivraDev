@@ -10,6 +10,7 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showResourcesMenu, setShowResourcesMenu] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -59,12 +60,59 @@ export default function Navbar() {
           <Link href="/pricing" className="hover:text-white transition-colors">
             Pricing
           </Link>
-          <Link href="/workspaces" className="hover:text-white transition-colors">
-            Workspaces
-          </Link>
-          <Link href="/docs" className="hover:text-white transition-colors">
-            Learn
-          </Link>
+          {user ? (
+            <Link href="/workspaces" className="hover:text-white transition-colors">
+              Workspaces
+            </Link>
+          ) : (
+            <Link href="/community" className="hover:text-white transition-colors">
+              Community
+            </Link>
+          )}
+          <div
+            className="relative"
+            onMouseEnter={() => setShowResourcesMenu(true)}
+            onMouseLeave={() => setShowResourcesMenu(false)}
+          >
+            <button
+              className="flex items-center gap-1 hover:text-white transition-colors"
+            >
+              Resources
+              <svg
+                className={`w-4 h-4 transition-transform ${
+                  showResourcesMenu ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showResourcesMenu && (
+              <div className="absolute left-0 top-full pt-2 w-40 z-50">
+                <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl">
+                  <div className="py-1">
+                    <a
+                      href="https://docs.civra.dev"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                    >
+                      Docs
+                    </a>
+                    <Link
+                      href="/community"
+                      className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                    >
+                      Community
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
