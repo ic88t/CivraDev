@@ -7,6 +7,7 @@ import { Send, Loader2, Code2, Eye, Download, Rocket, Sparkles, ArrowLeft, Copy,
 import { ProgressiveMessage, ProgressiveMessageData } from "./components/ProgressiveMessage";
 import { ProgressiveMessageManager, parseStreamMessage } from "./utils/progressiveMessageManager";
 import { Sidebar } from "./components/Sidebar";
+import { TopNavbar } from "./components/TopNavbar";
 
 interface Message {
   id: string | number;
@@ -409,23 +410,29 @@ function GeneratePageV0Content() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Left Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Top Navbar */}
+      <TopNavbar
+        projectName={projectName}
+        previewUrl={previewUrl}
+        onShare={() => {
+          if (previewUrl) {
+            navigator.clipboard.writeText(previewUrl);
+            // TODO: Show toast notification
+          }
+        }}
+        onPublish={() => {
+          // TODO: Implement publish flow
+        }}
+      />
+
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Chat Panel */}
       <div className="w-[480px] bg-white border-r border-gray-200 flex flex-col">
-        {/* Chat Header */}
-        <div className="h-14 border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-            <span className="text-sm font-medium text-gray-900">{projectName}</span>
-          </div>
-          <button className="text-gray-500 hover:text-gray-900">
-            <Copy className="w-4 h-4" />
-          </button>
-        </div>
-
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (
@@ -502,8 +509,8 @@ function GeneratePageV0Content() {
 
       {/* Preview Panel */}
       <div className="flex-1 flex flex-col bg-white">
-        {/* Preview Header */}
-        <div className="h-14 border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
+        {/* Preview Tabs */}
+        <div className="h-12 border-b border-gray-200 px-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveView("preview")}
@@ -526,22 +533,6 @@ function GeneratePageV0Content() {
             >
               <Code2 className="w-4 h-4" />
               Code
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button className="text-gray-600 hover:text-gray-900">
-              <Download className="w-4 h-4" />
-            </button>
-            <button className="px-4 py-1.5 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors flex items-center gap-2">
-              <span>Share</span>
-            </button>
-            <button className="px-4 py-1.5 rounded-lg text-sm font-medium bg-black text-white hover:bg-gray-900 transition-colors flex items-center gap-2">
-              <Rocket className="w-4 h-4" />
-              <span>Publish</span>
-            </button>
-            <button className="text-gray-600 hover:text-gray-900">
-              <MoreVertical className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -602,6 +593,7 @@ function GeneratePageV0Content() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
