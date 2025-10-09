@@ -91,7 +91,7 @@ function createSupabaseServer() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, sandboxId } = await req.json();
+    const { prompt, sandboxId, projectId } = await req.json();
 
     if (!prompt) {
       return new Response(
@@ -378,38 +378,66 @@ export async function POST(req: NextRequest) {
 
           // Save or update project in database
           if (finalSandboxId && !sandboxId) {
-            // This is a new project, create it
+            // This is a new project
             try {
-              // Generate AI-powered project summary
-              console.log('[API] Generating project summary...');
-              const projectSummary = await generateProjectSummary(prompt);
-              console.log(`[API] Generated project summary: ${projectSummary}`);
+              if (projectId) {
+                // Project already exists, just update it with sandboxId
+                console.log(`[API] Updating existing project ${projectId} with sandbox ${finalSandboxId}`);
 
-              const { data: newProject } = await supabase.from('projects').insert([{
-                name: projectSummary,
-                description: projectSummary,
-                prompt: prompt,
-                sandbox_id: finalSandboxId,
-                preview_url: previewUrl,
-                status: 'ACTIVE',
-                user_id: user.id,
-                workspace_id: null,
-                visibility: 'PRIVATE',
-              }]).select().single();
+                const { data: updatedProject } = await supabase
+                  .from('projects')
+                  .update({
+                    sandbox_id: finalSandboxId,
+                    preview_url: previewUrl,
+                    status: 'ACTIVE',
+                  })
+                  .eq('id', projectId)
+                  .select()
+                  .single();
 
-              console.log(`[API] Created new project in database: ${projectSummary} (${finalSandboxId})`);
+                if (updatedProject) {
+                  currentProjectId = updatedProject.id;
+                  console.log(`[API] Updated project: ${updatedProject.name} (${finalSandboxId})`);
 
-              // Save all pending messages now that we have the project ID
-              if (newProject) {
-                currentProjectId = newProject.id;
-                console.log(`[API] Saving ${pendingMessages.length} pending messages`);
-
-                for (const msg of pendingMessages) {
-                  await saveChatMessage(supabase, newProject.id, msg.role, msg.content);
+                  // Save all pending messages
+                  console.log(`[API] Saving ${pendingMessages.length} pending messages`);
+                  for (const msg of pendingMessages) {
+                    await saveChatMessage(supabase, updatedProject.id, msg.role, msg.content);
+                  }
+                  pendingMessages = [];
                 }
+              } else {
+                // Create new project (fallback for backward compatibility)
+                console.log('[API] Generating project summary...');
+                const projectSummary = await generateProjectSummary(prompt);
+                console.log(`[API] Generated project summary: ${projectSummary}`);
 
-                // Clear pending messages
-                pendingMessages = [];
+                const { data: newProject } = await supabase.from('projects').insert([{
+                  name: projectSummary,
+                  description: projectSummary,
+                  prompt: prompt,
+                  sandbox_id: finalSandboxId,
+                  preview_url: previewUrl,
+                  status: 'ACTIVE',
+                  user_id: user.id,
+                  workspace_id: null,
+                  visibility: 'PRIVATE',
+                }]).select().single();
+
+                console.log(`[API] Created new project in database: ${projectSummary} (${finalSandboxId})`);
+
+                // Save all pending messages now that we have the project ID
+                if (newProject) {
+                  currentProjectId = newProject.id;
+                  console.log(`[API] Saving ${pendingMessages.length} pending messages`);
+
+                  for (const msg of pendingMessages) {
+                    await saveChatMessage(supabase, newProject.id, msg.role, msg.content);
+                  }
+
+                  // Clear pending messages
+                  pendingMessages = [];
+                }
               }
             } catch (dbError) {
               console.error("[API] Failed to save project to database:", dbError);

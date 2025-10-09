@@ -42,11 +42,45 @@ export default function Home() {
     interval: 2000
   });
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
-    // Navigate to generate page with prompt
-    router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
+    try {
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      // Create project first
+      const response = await fetch('/api/projects/create', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Failed to create project:', error);
+        // Fallback to old route for now
+        router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
+        return;
+      }
+
+      const { projectId } = await response.json();
+
+      // Redirect to new project page
+      router.push(`/projects/${projectId}`);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      // Fallback to old route
+      router.push(`/generate?prompt=${encodeURIComponent(prompt)}`);
+    }
   };
 
   const fetchProjects = async () => {
@@ -485,8 +519,8 @@ export default function Home() {
                               if (project.status === 'stopped' || project.status === 'inactive') {
                                 await wakeUpSandbox(project.sandboxId, project.id);
                               }
-                              // Navigate to continue chat
-                              router.push(`/generate?sandboxId=${project.sandboxId}&continue=true`);
+                              // Navigate to project page
+                              router.push(`/projects/${project.id}`);
                             }}
                             disabled={wakingProjects.has(project.id)}
                             className={`px-3 py-1 rounded-lg text-sm transition-colors ${
@@ -616,8 +650,8 @@ export default function Home() {
                               if (project.status === 'stopped' || project.status === 'inactive') {
                                 await wakeUpSandbox(project.sandboxId, project.id);
                               }
-                              // Navigate to continue chat
-                              router.push(`/generate?sandboxId=${project.sandboxId}&continue=true`);
+                              // Navigate to project page
+                              router.push(`/projects/${project.id}`);
                             }}
                             disabled={wakingProjects.has(project.id)}
                             className={`px-3 py-1 rounded-lg text-sm transition-colors ${
