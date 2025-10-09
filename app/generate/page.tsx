@@ -4,12 +4,15 @@ import { useState, useEffect, useRef, Suspense, KeyboardEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase-client";
 import { Send, Loader2, Code2, Eye, Download, Rocket, ChevronLeft, Sparkles, ChevronRight, File, Folder } from "lucide-react";
+import { ProgressiveMessage, ProgressiveMessageData } from "./components/ProgressiveMessage";
+import { ProgressiveMessageManager, parseStreamMessage } from "./utils/progressiveMessageManager";
 
 interface Message {
   id: string | number;
-  type: "user" | "bot" | "system" | "assistant";
+  type: "user" | "bot" | "system" | "assistant" | "progressive";
   content: string;
   timestamp?: string;
+  progressiveData?: ProgressiveMessageData;
 }
 
 function GeneratePageContent() {
@@ -184,6 +187,39 @@ function GeneratePageContent() {
         headers.Authorization = `Bearer ${session.access_token}`;
       }
 
+      // Create a progressive message
+      const progressiveMessageId = Date.now();
+      let progressiveManager: ProgressiveMessageManager | null = null;
+
+      // Add the progressive message to the UI
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: progressiveMessageId,
+          type: "progressive",
+          content: "",
+          timestamp: new Date().toLocaleString(),
+          progressiveData: {
+            phase: "thinking",
+            thinkingStart: Date.now(),
+            thinkingActive: true,
+            tasks: [],
+            files: [],
+          },
+        },
+      ]);
+
+      // Initialize the manager
+      progressiveManager = new ProgressiveMessageManager((data) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === progressiveMessageId
+              ? { ...msg, progressiveData: data }
+              : msg
+          )
+        );
+      });
+
       const response = await fetch("/api/generate-daytona", {
         method: "POST",
         headers,
@@ -220,6 +256,11 @@ function GeneratePageContent() {
             try {
               const message = JSON.parse(data);
 
+              // Use progressive manager to handle messages
+              if (progressiveManager) {
+                parseStreamMessage(message, progressiveManager);
+              }
+
               if (message.type === "error") {
                 setMessages((prev) => [...prev, {
                   id: Date.now(),
@@ -232,33 +273,14 @@ function GeneratePageContent() {
                 setSandboxId(message.sandboxId || null);
                 setGenerationCompleted(true);
                 setIsGenerating(false);
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "bot",
-                  content: "✨ Your website has been generated successfully!",
-                  timestamp: new Date().toLocaleString(),
-                }]);
-              } else if (message.type === "claude_message") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "bot",
-                  content: message.content,
-                  timestamp: new Date().toLocaleString(),
-                }]);
-              } else if (message.type === "tool_use") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "system",
-                  content: `🔧 ${message.name}: ${message.input?.file_path || ""}`,
-                  timestamp: new Date().toLocaleString(),
-                }]);
-              } else if (message.type === "progress") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "system",
-                  content: message.message,
-                  timestamp: new Date().toLocaleString(),
-                }]);
+
+                // Complete the progressive message
+                if (progressiveManager) {
+                  progressiveManager.complete(
+                    "Your project has been generated successfully! I've created a modern, responsive interface with all the features you requested.",
+                    0
+                  );
+                }
               }
             } catch (e) {
               // Ignore parse errors
@@ -309,6 +331,37 @@ function GeneratePageContent() {
           content: msg.content,
         }));
 
+      // Create a progressive message for follow-up
+      const progressiveMessageId = Date.now();
+      let progressiveManager: ProgressiveMessageManager | null = null;
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: progressiveMessageId,
+          type: "progressive",
+          content: "",
+          timestamp: new Date().toLocaleString(),
+          progressiveData: {
+            phase: "thinking",
+            thinkingStart: Date.now(),
+            thinkingActive: true,
+            tasks: [],
+            files: [],
+          },
+        },
+      ]);
+
+      progressiveManager = new ProgressiveMessageManager((data) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === progressiveMessageId
+              ? { ...msg, progressiveData: data }
+              : msg
+          )
+        );
+      });
+
       const response = await fetch("/api/chat-civra", {
         method: "POST",
         headers: authHeaders,
@@ -344,6 +397,11 @@ function GeneratePageContent() {
             try {
               const message = JSON.parse(data);
 
+              // Use progressive manager to handle messages
+              if (progressiveManager) {
+                parseStreamMessage(message, progressiveManager);
+              }
+
               if (message.type === "error") {
                 setMessages((prev) => [...prev, {
                   id: Date.now(),
@@ -354,27 +412,14 @@ function GeneratePageContent() {
               } else if (message.type === "complete") {
                 if (message.previewUrl) setPreviewUrl(message.previewUrl);
                 setIsGenerating(false);
-              } else if (message.type === "message") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "bot",
-                  content: message.content,
-                  timestamp: new Date().toLocaleString(),
-                }]);
-              } else if (message.type === "status") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "system",
-                  content: message.content,
-                  timestamp: new Date().toLocaleString(),
-                }]);
-              } else if (message.type === "tool_use") {
-                setMessages((prev) => [...prev, {
-                  id: Date.now(),
-                  type: "system",
-                  content: `🔧 ${message.name}: ${message.input?.file_path || ""}`,
-                  timestamp: new Date().toLocaleString(),
-                }]);
+
+                // Complete the progressive message
+                if (progressiveManager) {
+                  progressiveManager.complete(
+                    "Changes have been applied successfully!",
+                    0
+                  );
+                }
               }
             } catch (parseError) {
               // Ignore
@@ -609,6 +654,9 @@ function GeneratePageContent() {
                   {msg.content}
                 </div>
               )}
+              {msg.type === "progressive" && msg.progressiveData && (
+                <ProgressiveMessage data={msg.progressiveData} />
+              )}
               {(msg.type === "bot" || msg.type === "assistant") && (
                 <div className="text-gray-400 leading-relaxed">
                   {msg.content.split('\n').map((line, i) => (
@@ -624,12 +672,6 @@ function GeneratePageContent() {
               )}
             </div>
           ))}
-          {isGenerating && (
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Thinking...</span>
-            </div>
-          )}
           <div ref={messagesEndRef} />
         </div>
 
