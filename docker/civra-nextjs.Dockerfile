@@ -20,7 +20,7 @@ COPY docker/base-package.json ./package.json
 
 # Pre-install all common Next.js dependencies
 # This is the key optimization - deps are already installed
-RUN pnpm install --frozen-lockfile && pnpm store prune
+RUN pnpm install --no-frozen-lockfile && pnpm store prune
 
 # Install Claude Code SDK globally
 RUN npm install -g @anthropic-ai/claude-code
