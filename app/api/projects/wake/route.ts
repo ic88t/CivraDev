@@ -188,49 +188,58 @@ export async function POST(req: NextRequest) {
         }
         
         console.log(`[API] Development server restart completed`);
-        
-        // Wait a bit for the dev server to start
-        console.log(`[API] Waiting for dev server to initialize...`);
-        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
-        
-        // Try to get preview URL and do health check
-        const preview = await sandbox.getPreviewLink(3000);
-        console.log(`[API] Preview link result:`, preview);
-        
-        if (preview?.url) {
-          // Do a quick health check on the URL
+
+        // Wait for dev server to be ready by monitoring logs
+        console.log(`[API] Monitoring dev server startup...`);
+        let serverReady = false;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds max wait
+
+        while (!serverReady && attempts < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          attempts++;
+
           try {
-            const healthResponse = await fetch(preview.url, { 
-              method: 'HEAD',
-              signal: AbortSignal.timeout(8000) // 8 second timeout
-            });
-            
-            if (healthResponse.ok || healthResponse.status === 200) {
-              console.log(`[API] Preview URL is healthy: ${preview.url}`);
-              return new Response(
-                JSON.stringify({
-                  success: true,
-                  status: 'started',
-                  state: (sandbox as any).state,
-                  isOnline: true,
-                  previewUrl: preview.url,
-                  sandboxId: sandboxId,
-                  message: "Sandbox woken up and ready"
-                }),
-                {
-                  status: 200,
-                  headers: { "Content-Type": "application/json" }
-                }
-              );
-            } else {
-              console.log(`[API] Preview URL returned status: ${healthResponse.status}`);
+            // Check dev server logs for ready indicators
+            const logCheck = await sandbox.process.executeCommand(
+              `cat dev-server.log 2>/dev/null | tail -20`,
+              `${rootDir}/website-project`
+            );
+
+            const logs = logCheck.result || "";
+
+            // Look for Next.js ready indicators
+            if (
+              logs.includes("Ready in") ||
+              logs.includes("compiled successfully") ||
+              logs.includes("Local:") ||
+              logs.includes("started server on") ||
+              logs.includes("localhost:3000")
+            ) {
+              serverReady = true;
+              console.log(`[API] ✓ Dev server is ready! (${attempts}s)`);
+              break;
             }
-          } catch (healthError) {
-            console.log(`[API] Preview URL health check failed: ${healthError}`);
+
+            // Check for compilation errors
+            if (logs.includes("Failed to compile") || logs.includes("error -")) {
+              console.log(`[API] ⚠️ Dev server compilation errors detected`);
+              break;
+            }
+          } catch (logError) {
+            console.log(`[API] Could not check logs (attempt ${attempts})`);
           }
         }
-        
-        // Return success even if health check failed - the sandbox is running
+
+        if (!serverReady) {
+          console.log(`[API] ⚠️ Dev server not ready after ${attempts}s, returning URL anyway`);
+        }
+
+        // Get preview URL
+        const preview = await sandbox.getPreviewLink(3000);
+        console.log(`[API] Preview link result:`, preview);
+
+        // Return preview URL
         return new Response(
           JSON.stringify({
             success: true,
@@ -239,7 +248,8 @@ export async function POST(req: NextRequest) {
             isOnline: true,
             previewUrl: preview?.url || null,
             sandboxId: sandboxId,
-            message: "Sandbox started, dev server initializing"
+            serverReady: serverReady,
+            message: serverReady ? "Development server ready" : "Development server starting..."
           }),
           {
             status: 200,

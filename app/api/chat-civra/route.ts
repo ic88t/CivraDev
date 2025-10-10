@@ -200,34 +200,40 @@ export async function POST(req: NextRequest) {
           })}\n\n`
         );
 
-        // Get file structure for context
-        const fileTree = await sandbox.process.executeCommand(
-          `find . -type f -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./.git/*" | head -50`,
-          projectDir
-        );
-
-        // Read allowed files (similar to Civra prompt structure)
+        // Read files in parallel instead of sequentially for speed
         const allowedFiles = [
           "package.json",
-          "tsconfig.json",
-          "next.config.ts",
-          "next.config.js",
           "app/page.tsx",
           "app/layout.tsx",
           "app/globals.css",
-          "tailwind.config.ts",
         ];
 
         let codeContext = "## Current Project Files\n\n";
 
-        for (const file of allowedFiles) {
-          const fileContent = await sandbox.process.executeCommand(
-            `cat ${file} 2>/dev/null || echo ""`,
-            projectDir
-          );
+        // Read all files in parallel
+        const fileReadPromises = allowedFiles.map(async (file) => {
+          try {
+            const fileContent = await sandbox.process.executeCommand(
+              `cat ${file} 2>/dev/null || echo ""`,
+              projectDir
+            );
 
-          if (fileContent.result && fileContent.result.trim().length > 0) {
-            codeContext += `### ${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
+            if (fileContent.result && fileContent.result.trim().length > 0) {
+              return { file, content: fileContent.result };
+            }
+            return null;
+          } catch (error) {
+            console.log(`[CIVRA-CHAT] Failed to read ${file}:`, error);
+            return null;
+          }
+        });
+
+        const fileResults = await Promise.all(fileReadPromises);
+
+        // Build context from results
+        for (const result of fileResults) {
+          if (result) {
+            codeContext += `### ${result.file}\n\`\`\`\n${result.content}\n\`\`\`\n\n`;
           }
         }
 
@@ -265,6 +271,10 @@ export async function POST(req: NextRequest) {
           max_tokens: 8000,
           system: systemPrompt,
           messages: messages,
+          thinking: {
+            type: "enabled",
+            budget_tokens: 2000
+          }
         });
 
         const apiResponse = await new Promise<any>((resolve, reject) => {
@@ -302,8 +312,30 @@ export async function POST(req: NextRequest) {
           throw new Error("API Error: " + JSON.stringify(apiResponse.error));
         }
 
-        const responseText = apiResponse.content[0].text.trim();
+        // Extract thinking content if present
+        let thinkingContent = "";
+        let responseText = "";
+
+        for (const block of apiResponse.content) {
+          if (block.type === "thinking") {
+            thinkingContent = block.thinking || "";
+            console.log("[CIVRA-CHAT] Thinking content:", thinkingContent.substring(0, 200));
+          } else if (block.type === "text") {
+            responseText = block.text.trim();
+          }
+        }
+
         console.log("[CIVRA-CHAT] Claude response:", responseText.substring(0, 500));
+
+        // Send thinking content to UI if available
+        if (thinkingContent) {
+          await safeWrite(
+            `data: ${JSON.stringify({
+              type: "thinking",
+              content: thinkingContent,
+            })}\n\n`
+          );
+        }
 
         // Extract clean messages (text outside <dec-code> blocks)
         const beforeCodeMatch = responseText.match(/^([\s\S]*?)<dec-code>/);
@@ -339,6 +371,13 @@ export async function POST(req: NextRequest) {
         const parsed = parseCivraResponse(responseText);
 
         console.log(`[CIVRA-CHAT] Parsed ${parsed.operations.length} operations`);
+        console.log(`[CIVRA-CHAT] Has <dec-code>: ${responseText.includes('<dec-code>')}`);
+        console.log(`[CIVRA-CHAT] Has </dec-code>: ${responseText.includes('</dec-code>')}`);
+        if (parsed.operations.length === 0 && responseText.includes('<dec-code>')) {
+          console.log(`[CIVRA-CHAT] WARNING: Response has dec-code but no operations parsed!`);
+          console.log(`[CIVRA-CHAT] Code block length: ${parsed.codeBlock?.length || 0}`);
+          console.log(`[CIVRA-CHAT] First 200 chars of code block:`, parsed.codeBlock?.substring(0, 200));
+        }
 
         // Execute file operations
         if (parsed.operations.length > 0) {
@@ -370,7 +409,7 @@ export async function POST(req: NextRequest) {
                 await safeWrite(
                   `data: ${JSON.stringify({
                     type: "tool_use",
-                    name: "write",
+                    name: "Write",
                     input: { file_path: op.filePath },
                   })}\n\n`
                 );

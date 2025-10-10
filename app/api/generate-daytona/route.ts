@@ -468,10 +468,37 @@ export async function POST(req: NextRequest) {
             })}\n\n`)
           );
           console.log(`[API] Generation complete. Preview URL: ${previewUrl}`);
+
+          // Trigger screenshot capture asynchronously (don't wait for it)
+          if (projectId && previewUrl) {
+            console.log(`[API] Triggering screenshot capture for project ${projectId}`);
+
+            // Get auth token for screenshot API
+            const { data: { session } } = await supabase.auth.getSession();
+
+            // Trigger screenshot in background using ScreenshotOne service
+            fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/projects/${projectId}/screenshot-service`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+              }
+            }).then(async (res) => {
+              if (res.ok) {
+                const data = await res.json();
+                console.log(`[API] Screenshot captured successfully: ${data.screenshot_url}`);
+              } else {
+                const error = await res.text();
+                console.log(`[API] Screenshot capture failed: ${error}`);
+              }
+            }).catch((err) => {
+              console.log(`[API] Screenshot capture error: ${err.message}`);
+            });
+          }
         } else {
           throw new Error("Failed to get preview URL");
         }
-        
+
         // Send done signal
         await writer.write(encoder.encode("data: [DONE]\n\n"));
       } catch (error: any) {

@@ -88,6 +88,13 @@ function ProjectPageContent() {
       }
 
       const project = await projectResponse.json();
+      console.log('[LOAD-PROJECT] Project data:', {
+        name: project.name,
+        status: project.status,
+        sandboxId: project.sandboxId,
+        hasPreviewUrl: !!project.previewUrl,
+        previewUrl: project.previewUrl
+      });
 
       // Set project data
       setProjectName(project.name || "New Project");
@@ -100,14 +107,28 @@ function ProjectPageContent() {
 
         // Wake up Daytona in the background if it's stopped/inactive
         if (project.status === 'stopped' || project.status === 'inactive') {
+          console.log('[LOAD-PROJECT] Sandbox is stopped, initiating wake-up...');
+          // DON'T set preview URL yet - keep it null to show loading screen
           // Wake up sandbox without blocking the UI
           setIsLoadingPreview(true);
           wakeUpSandbox(project.sandboxId, authHeaders);
         } else {
+          console.log('[LOAD-PROJECT] Sandbox is running, fetching fresh preview URL...');
+          // If already running, set preview URL first, then fetch fresh one
+          if (project.previewUrl) {
+            console.log('[LOAD-PROJECT] Setting initial preview URL:', project.previewUrl);
+            setPreviewUrl(project.previewUrl);
+          }
           // If already running, just fetch the preview URL
           setIsLoadingPreview(true);
           await fetchPreviewUrl(project.sandboxId);
           // Don't set isLoadingPreview to false here - let the iframe onLoad handle it
+        }
+
+        // Check if screenshot is missing and preview URL exists - capture it
+        if (!project.screenshot_url && project.previewUrl) {
+          console.log('📸 [SCREENSHOT] No screenshot found, capturing one...');
+          captureScreenshotInBackground(authHeaders);
         }
       } else if (project.status === 'creating' && project.prompt && !hasStartedRef.current) {
         // Start initial generation if project is new and hasn't been started yet
@@ -123,6 +144,45 @@ function ProjectPageContent() {
       setIsLoading(false);
       // Optionally redirect to home if project not found
       // router.push("/");
+    }
+  };
+
+  const captureScreenshotInBackground = async (authHeaders: Record<string, string>, forceCapture = false) => {
+    try {
+      // Check if screenshot already exists (unless forcing capture)
+      if (!forceCapture) {
+        const checkResponse = await fetch(`/api/projects/${projectId}`, {
+          headers: authHeaders,
+        });
+
+        if (checkResponse.ok) {
+          const projectData = await checkResponse.json();
+          if (projectData.screenshot_url) {
+            console.log('📸 [SCREENSHOT] Screenshot already exists, skipping capture');
+            return;
+          }
+        }
+      }
+
+      console.log('📸 [SCREENSHOT] Triggering screenshot capture...');
+
+      const response = await fetch(`/api/projects/${projectId}/screenshot-service`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ [SCREENSHOT] Screenshot captured successfully:', data.screenshot_url);
+      } else {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('⚠️ [SCREENSHOT] Screenshot capture failed:', error);
+      }
+    } catch (error) {
+      console.log('❌ [SCREENSHOT] Screenshot capture error:', error);
     }
   };
 
@@ -145,10 +205,60 @@ function ProjectPageContent() {
         const data = await response.json();
         console.log('✅ [WAKE-UP] API Response data:', data);
 
-        // Update preview URL when ready (keep loading state until iframe loads)
+        // Set preview URL when wake-up completes
         if (data.previewUrl) {
-          setPreviewUrl(data.previewUrl);
-          // Don't set isLoadingPreview to false here - let the iframe onLoad handle it
+          console.log('✅ [WAKE-UP] Wake-up complete! Received preview URL:', data.previewUrl);
+          console.log('✅ [WAKE-UP] Server ready status:', data.serverReady);
+
+          // Poll the preview URL until it responds successfully
+          // This ensures dev server is actually ready before showing iframe
+          const pollDevServer = async () => {
+            const maxAttempts = 30; // 30 attempts = 30 seconds max
+            let attempt = 0;
+
+            console.log('🔄 [WAKE-UP] Polling dev server until ready...');
+
+            while (attempt < maxAttempts) {
+              attempt++;
+
+              try {
+                // Try to fetch the preview URL
+                const pingResponse = await fetch(data.previewUrl, {
+                  method: 'HEAD',
+                  mode: 'no-cors'
+                });
+
+                console.log(`✅ [WAKE-UP] Dev server responding! (attempt ${attempt})`);
+                return true;
+              } catch (error) {
+                console.log(`⏳ [WAKE-UP] Dev server not ready yet (attempt ${attempt}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between attempts
+              }
+            }
+
+            console.warn('⚠️ [WAKE-UP] Dev server not responding after 30s, showing iframe anyway');
+            return false;
+          };
+
+          // Poll dev server, then show iframe
+          pollDevServer().then((isReady) => {
+            console.log('🎬 [WAKE-UP] Setting preview URL in iframe now');
+            setPreviewUrl(data.previewUrl);
+
+            // Clear loading overlay
+            setTimeout(() => {
+              setIsLoadingPreview(false);
+            }, 1000);
+
+            // Trigger screenshot capture after iframe loads
+            setTimeout(() => {
+              captureScreenshotInBackground(authHeaders);
+            }, 5000);
+          });
+        } else {
+          // No preview URL - clear loading and show error state
+          console.warn('⚠️ [WAKE-UP] No preview URL received');
+          setIsLoadingPreview(false);
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -219,9 +329,14 @@ function ProjectPageContent() {
       if (response.ok) {
         const data = await response.json();
         setPreviewUrl(data.previewUrl);
+      } else {
+        // If preview fetch fails, stop loading
+        console.error("Failed to fetch preview URL:", response.status);
+        setIsLoadingPreview(false);
       }
     } catch (error) {
       console.error("Failed to fetch preview URL:", error);
+      setIsLoadingPreview(false);
     }
   };
 
@@ -1087,13 +1202,21 @@ function ProjectPageContent() {
                       </div>
                     )}
 
-                    {/* Iframe */}
+                    {/* Iframe - key forces reload when URL changes */}
                     <iframe
+                      key={previewUrl}
                       src={previewUrl}
                       className="w-full h-[calc(100%-2rem)] border-0"
                       title="Website Preview"
                       sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
-                      onLoad={() => setIsLoadingPreview(false)}
+                      onLoad={() => {
+                        console.log('✅ Iframe loaded successfully');
+                        setIsLoadingPreview(false);
+                      }}
+                      onError={(e) => {
+                        console.error('❌ Iframe failed to load', e);
+                        setIsLoadingPreview(false);
+                      }}
                     />
                   </div>
                 </div>

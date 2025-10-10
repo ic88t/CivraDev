@@ -19,8 +19,10 @@
     "@supabase/supabase-js": "^2.57.4",
     "dotenv": "^17.0.1",
     "framer-motion": "^12.23.12",
+    "lucide-react": "^0.545.0",
     "next": "14.2.3",
     "next-auth": "^4.24.5",
+    "puppeteer": "^24.24.0",
     "react": "^18",
     "react-dom": "^18"
   },

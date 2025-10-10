@@ -36,6 +36,17 @@ export class ProgressiveMessageManager {
   }
 
   /**
+   * Set thinking content (Claude's internal reasoning)
+   */
+  setThinkingContent(content: string) {
+    this.data = {
+      ...this.data,
+      thinkingContent: content,
+    };
+    this.update();
+  }
+
+  /**
    * End thinking phase and move to planning
    */
   endThinking(planningStatement: string) {
@@ -151,12 +162,19 @@ export class ProgressiveMessageManager {
    * Complete generation with summary
    */
   complete(summary: string, issues: number = 0) {
+    // Mark all tasks as completed before finishing
+    const completedTasks = (this.data.tasks || []).map((t) => ({
+      ...t,
+      status: "completed" as const,
+    }));
+
     // Auto-set issues based on build errors if not explicitly provided
     const finalIssues = this.buildErrors.length > 0 ? this.buildErrors.length : issues;
 
     this.data = {
       ...this.data,
       phase: "complete",
+      tasks: completedTasks,
       summary,
       issues: finalIssues,
     };
@@ -195,6 +213,13 @@ export function parseStreamMessage(
   if (!message || !message.type) return false;
 
   switch (message.type) {
+    case "thinking":
+      // Handle thinking content from extended thinking
+      if (message.content) {
+        manager.setThinkingContent(message.content);
+      }
+      return true;
+
     case "progress":
       // Handle progress messages (e.g., "Creating sandbox...", "Installing dependencies...")
       if (message.message) {
@@ -205,16 +230,25 @@ export function parseStreamMessage(
     case "tool_use":
       // Handle tool usage (e.g., Write, Edit operations)
       if (message.name === "Write" || message.name === "Edit") {
-        const fileName = message.input?.file_path?.split("/").pop() || "file";
-        manager.addTask(`${message.name === "Write" ? "Created" : "Updated"} ${fileName}`);
-      } else {
-        manager.addTask(`${message.name}`);
+        const filePath = message.input?.file_path || "file";
+        const fileName = filePath.split("/").pop() || filePath;
+        manager.addTask(`Writing ${filePath}`);
+      } else if (message.name) {
+        // Skip other tool uses to reduce noise
+        // manager.addTask(`${message.name}`);
       }
       return true;
 
     case "claude_message":
       // Handle Claude's planning statements
       if (message.content && !message.content.includes("<dec-code>")) {
+        manager.endThinking(message.content);
+      }
+      return true;
+
+    case "message":
+      // Handle clean message from chat-civra (intro/outro messages)
+      if (message.content) {
         manager.endThinking(message.content);
       }
       return true;

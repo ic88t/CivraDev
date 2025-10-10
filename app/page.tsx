@@ -122,7 +122,7 @@ export default function Home() {
       <Navbar />
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8">
+      <div className="relative z-10 flex flex-col items-center px-4 sm:px-6 lg:px-8 pt-32 pb-20">
         <div className="max-w-5xl mx-auto text-center">
           {/* Hero Section */}
           <h1 className="text-4xl sm:text-4xl md:text-6xl font-bold text-white mb-6">
@@ -346,14 +346,6 @@ export default function Home() {
           ) : activeTab === "projects" ? (
             /* Projects Tab */
             <div className="max-w-7xl mx-auto">
-              <div className="grid lg:grid-cols-4 gap-6">
-                {/* Usage Dashboard */}
-                <div className="lg:col-span-1">
-                  <UsageDashboard />
-                </div>
-                
-                {/* Projects List */}
-                <div className="lg:col-span-3">
               {loadingProjects ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
@@ -363,7 +355,7 @@ export default function Home() {
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2">No projects yet</h3>
@@ -376,50 +368,64 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {projects.map((project) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {projects.filter(project => project.status !== 'deleted').map((project) => (
                     <div
                       key={project.id}
-                      onClick={() => {
-                        // Navigate to project page
-                        router.push(`/projects/${project.id}`);
-                      }}
-                      className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 hover:border-purple-500 hover:bg-gray-900/70 transition-all cursor-pointer"
+                      onClick={() => router.push(`/projects/${project.id}`)}
+                      className="group relative bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden hover:border-purple-500 hover:shadow-2xl hover:shadow-purple-500/20 transition-all cursor-pointer"
                     >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      {/* Screenshot Preview */}
+                      <div className="relative w-full h-48 bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden">
+                        {project.screenshot_url ? (
+                          <img
+                            src={project.screenshot_url}
+                            alt={project.name || 'Project preview'}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                           </div>
-                          <div>
-                            <h3 className="text-white font-semibold">{project.name || 'Unnamed Project'}</h3>
-                            <p className="text-gray-400 text-sm line-clamp-1">{project.description || project.prompt}</p>
-                          </div>
-                        </div>
-                        <div className={`px-2 py-1 rounded-full text-xs flex-shrink-0 ${
-                          project.status === 'running' || project.status === 'active'
-                            ? 'bg-green-900/30 text-green-300'
-                            : project.status === 'stopped' || project.status === 'inactive'
-                            ? 'bg-yellow-900/30 text-yellow-300'
-                            : 'bg-gray-800 text-gray-400'
-                        }`}>
-                          {project.status === 'stopped' ? 'Sleeping' : project.status || 'Unknown'}
+                        )}
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                          <span className="text-white text-sm font-medium">View Project →</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
-                          {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
+                      {/* Project Info */}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="text-white font-semibold line-clamp-1">{project.name || 'Unnamed Project'}</h3>
+                          <div className={`px-2 py-1 rounded-full text-xs flex-shrink-0 ml-2 ${
+                            project.status === 'running' || project.status === 'active'
+                              ? 'bg-green-900/30 text-green-300'
+                              : project.status === 'stopped' || project.status === 'inactive'
+                              ? 'bg-yellow-900/30 text-yellow-300'
+                              : 'bg-gray-800 text-gray-400'
+                          }`}>
+                            {project.status === 'stopped' ? 'Sleeping' : project.status || 'Unknown'}
+                          </div>
+                        </div>
+                        <p className="text-gray-400 text-sm line-clamp-2 mb-3">{project.description || project.prompt}</p>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>{project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                          <div className="flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+                            </svg>
+                            <span>Preview</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-                </div>
-              </div>
             </div>
           ) : null}
         </div>

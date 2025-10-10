@@ -112,8 +112,13 @@ export async function GET(req: NextRequest) {
                 .eq('id', project.id);
             }
           } catch (error) {
-            console.log(`[API] Could not sync project ${project.id} with Daytona:`, error);
-            status = 'ERROR';
+            // Silently skip deleted sandboxes instead of logging errors
+            if (error && (error as any).message?.includes('not found')) {
+              status = 'DELETED';
+            } else {
+              console.log(`[API] Could not sync project ${project.id} with Daytona:`, error);
+              status = 'ERROR';
+            }
           }
         }
 
@@ -127,6 +132,7 @@ export async function GET(req: NextRequest) {
           visibility: project.visibility?.toLowerCase(),
           createdAt: project.created_at,
           previewUrl: previewUrl,
+          screenshot_url: project.screenshot_url,
           owner: { name: 'You' }, // Since we know it's the current user
           workspace: null, // No workspace support yet
         };

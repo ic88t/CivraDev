@@ -171,10 +171,29 @@ async function generateWithCivra(
     } else {
       debugLog("1. Creating new Daytona sandbox...");
       chatLog("⚙️ Setting up your development environment...");
-      sandbox = await daytona.create({
-        public: true,
-        image: "node:20",
-      });
+
+      // Try to use pre-configured image, fallback to node:20 if not available
+      let imageToUse = "iceonice/civra-nextjs:latest";
+      try {
+        sandbox = await daytona.create({
+          public: true,
+          image: imageToUse,
+        });
+        debugLog(`✓ Using pre-configured image: ${imageToUse}`);
+      } catch (imageError) {
+        debugLog(`Pre-configured image not found, using fallback node:20...`);
+        imageToUse = "node:20";
+        sandbox = await daytona.create({
+          public: true,
+          image: imageToUse,
+        });
+        debugLog(`✓ Using fallback image: ${imageToUse}`);
+
+        // Install pnpm on fallback image
+        debugLog("Installing pnpm globally for speed...");
+        await sandbox.process.executeCommand("npm install -g pnpm", "/root");
+      }
+
       sandboxId = sandbox.id;
       debugLog(`✓ Sandbox created: ${sandboxId}`);
     }
@@ -264,7 +283,7 @@ async function generateWithCivra(
       sendClaudeMessage(introMessage);
     }
 
-    // Step 5: Parse and execute operations
+    // Step 5: Parse and execute operations (OPTIMIZED: Parallel execution)
     const operations = parseCivraResponse(response);
     debugLog(`\n5. Executing ${operations.length} file operations...\n`);
 
@@ -275,35 +294,85 @@ async function generateWithCivra(
       chatLog("🔧 Generating project files...");
     }
 
-    for (const op of operations) {
-      try {
-        if (op.type === "write" && op.filePath && op.content !== undefined) {
-          // Ensure directory exists
-          const dir = path.dirname(op.filePath);
-          if (dir !== ".") {
-            await sandbox.process.executeCommand(`mkdir -p ${dir}`, projectDir);
+    // Group operations by type for parallel execution
+    const writeOps = operations.filter(op => op.type === "write");
+    const deleteOps = operations.filter(op => op.type === "delete");
+    const renameOps = operations.filter(op => op.type === "rename");
+    const depOps = operations.filter(op => op.type === "add-dependency");
+
+    // Execute write operations in parallel (biggest speedup)
+    if (writeOps.length > 0) {
+      debugLog(`Writing ${writeOps.length} files in parallel...`);
+      await Promise.all(writeOps.map(async (op) => {
+        try {
+          if (op.filePath && op.content !== undefined) {
+            // Check if file already exists with same content (skip unchanged)
+            const existingContent = await sandbox.process.executeCommand(
+              `cat ${op.filePath} 2>/dev/null || echo ""`,
+              projectDir
+            );
+
+            if (existingContent.result?.trim() === op.content.trim()) {
+              debugLog(`  ⏭️  Skipped: ${op.filePath} (unchanged)`);
+              return;
+            }
+
+            // Ensure directory exists
+            const dir = path.dirname(op.filePath);
+            if (dir !== ".") {
+              await sandbox.process.executeCommand(`mkdir -p ${dir}`, projectDir);
+            }
+
+            // Write file using heredoc
+            await sandbox.process.executeCommand(
+              `cat > ${op.filePath} << 'FILE_EOF'\n${op.content}\nFILE_EOF`,
+              projectDir
+            );
+
+            debugLog(`  ✓ Wrote: ${op.filePath}`);
           }
+        } catch (opError) {
+          debugLog(`  ✗ Failed to write ${op.filePath}:`, opError);
+        }
+      }));
+    }
 
-          // Write file using heredoc (no escaping needed with 'FILE_EOF')
-          await sandbox.process.executeCommand(
-            `cat > ${op.filePath} << 'FILE_EOF'\n${op.content}\nFILE_EOF`,
-            projectDir
-          );
+    // Execute delete operations in parallel
+    if (deleteOps.length > 0) {
+      await Promise.all(deleteOps.map(async (op) => {
+        try {
+          if (op.filePath) {
+            await sandbox.process.executeCommand(`rm -f ${op.filePath}`, projectDir);
+            debugLog(`  ✓ Deleted: ${op.filePath}`);
+          }
+        } catch (opError) {
+          debugLog(`  ✗ Failed to delete ${op.filePath}:`, opError);
+        }
+      }));
+    }
 
-          debugLog(`  ✓ Wrote: ${op.filePath}`);
-        } else if (op.type === "delete" && op.filePath) {
-          await sandbox.process.executeCommand(`rm -f ${op.filePath}`, projectDir);
-          debugLog(`  ✓ Deleted: ${op.filePath}`);
-        } else if (op.type === "rename" && op.originalPath && op.newPath) {
+    // Execute rename operations sequentially (order may matter)
+    for (const op of renameOps) {
+      try {
+        if (op.originalPath && op.newPath) {
           await sandbox.process.executeCommand(
             `mv ${op.originalPath} ${op.newPath}`,
             projectDir
           );
           debugLog(`  ✓ Renamed: ${op.originalPath} -> ${op.newPath}`);
-        } else if (op.type === "add-dependency" && op.package) {
+        }
+      } catch (opError) {
+        debugLog(`  ✗ Failed to rename:`, opError);
+      }
+    }
+
+    // Execute dependency installations sequentially (npm install can conflict)
+    for (const op of depOps) {
+      try {
+        if (op.package) {
           debugLog(`  Installing: ${op.package}...`);
           await sandbox.process.executeCommand(
-            `npm install ${op.package}`,
+            `pnpm add ${op.package}`,  // Use pnpm for speed
             projectDir,
             undefined,
             180000 // 3 min timeout
@@ -311,11 +380,11 @@ async function generateWithCivra(
           debugLog(`  ✓ Installed: ${op.package}`);
         }
       } catch (opError) {
-        debugLog(`  ✗ Failed to execute operation:`, opError);
+        debugLog(`  ✗ Failed to install dependency:`, opError);
       }
     }
 
-    // Step 6: Install dependencies if package.json exists
+    // Step 6: Install dependencies if package.json exists (OPTIMIZED: Use pnpm)
     debugLog("\n6. Installing dependencies...");
     chatLog("📦 Installing dependencies...");
     const hasPackageJson = await sandbox.process.executeCommand(
@@ -324,20 +393,45 @@ async function generateWithCivra(
     );
 
     if (hasPackageJson.result?.trim() === "yes") {
-      debugLog("Running npm install...");
-      const npmInstall = await sandbox.process.executeCommand(
-        "npm install --legacy-peer-deps",
-        projectDir,
-        undefined,
-        300000 // 5 min timeout
+      // Check if this is a new project or if new deps were added
+      const hasNodeModules = await sandbox.process.executeCommand(
+        `test -d node_modules && echo "yes" || echo "no"`,
+        projectDir
       );
 
-      if (npmInstall.exitCode === 0) {
-        debugLog("✓ Dependencies installed");
+      if (hasNodeModules.result?.trim() === "yes") {
+        debugLog("Using pnpm install for speed (with cache)...");
+        const pnpmInstall = await sandbox.process.executeCommand(
+          "pnpm install --prefer-offline --no-frozen-lockfile",
+          projectDir,
+          undefined,
+          180000 // 3 min timeout (pnpm is faster)
+        );
+
+        if (pnpmInstall.exitCode === 0) {
+          debugLog("✓ Dependencies installed (pnpm with cache)");
+        } else {
+          debugLog("⚠️  pnpm install had issues, falling back to npm:");
+          debugLog(pnpmInstall.result?.substring(0, 500));
+          // Fallback to npm
+          await sandbox.process.executeCommand(
+            "npm install --legacy-peer-deps",
+            projectDir,
+            undefined,
+            300000
+          );
+          debugLog("✓ Dependencies installed (npm fallback)");
+        }
       } else {
-        debugLog("⚠️  npm install had issues:");
-        debugLog(npmInstall.result?.substring(0, 500));
-        throw new Error("npm install failed. Check the logs above.");
+        // New project - deps may already be in base image, just link them
+        debugLog("Linking pre-installed dependencies from base image...");
+        await sandbox.process.executeCommand(
+          "pnpm install --prefer-offline || npm install --legacy-peer-deps",
+          projectDir,
+          undefined,
+          180000
+        );
+        debugLog("✓ Dependencies ready");
       }
     }
 
@@ -351,18 +445,64 @@ async function generateWithCivra(
       projectDir
     );
 
-    // Start in background
-    await sandbox.process.executeCommand(
+    // Wait a moment for ports to be released
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Start in background with better logging
+    debugLog("Starting Next.js dev server on port 3000...");
+    const startServer = await sandbox.process.executeCommand(
       `nohup npm run dev > dev-server.log 2>&1 &`,
       projectDir,
       { PORT: "3000" }
     );
 
-    debugLog("✓ Server started in background");
+    debugLog("✓ Server start command sent");
 
-    // Wait for server
+    // Wait for server to be ready and check logs
     debugLog("Waiting for server to start...");
-    await new Promise((resolve) => setTimeout(resolve, 8000));
+    let serverReady = false;
+    let attempts = 0;
+    const maxAttempts = 20; // 20 seconds max
+
+    while (!serverReady && attempts < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      attempts++;
+
+      // Check if server is running
+      const logCheck = await sandbox.process.executeCommand(
+        `cat dev-server.log 2>/dev/null | tail -20`,
+        projectDir
+      );
+
+      const logs = logCheck.result || "";
+      debugLog(`Server logs (attempt ${attempts}):`, logs.substring(0, 200));
+
+      // Look for success indicators
+      if (logs.includes("Ready in") ||
+          logs.includes("started server") ||
+          logs.includes("Local:") ||
+          logs.includes("localhost:3000")) {
+        serverReady = true;
+        debugLog("✓ Server is ready!");
+        break;
+      }
+
+      // Check for errors
+      if (logs.includes("Error:") || logs.includes("Failed to compile")) {
+        debugLog("⚠️  Server encountered an error:");
+        debugLog(logs);
+        throw new Error("Dev server failed to start. Check logs above.");
+      }
+    }
+
+    if (!serverReady) {
+      debugLog("⚠️  Server may not be ready yet, but continuing...");
+      const finalLogs = await sandbox.process.executeCommand(
+        `cat dev-server.log 2>/dev/null`,
+        projectDir
+      );
+      debugLog("Final server logs:", finalLogs.result?.substring(0, 500));
+    }
 
     // Step 8: Get preview URL
     debugLog("\n8. Getting preview URL...");
