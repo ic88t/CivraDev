@@ -7,7 +7,7 @@ import { Send, Loader2, Code2, Eye, Download, Rocket, Sparkles, ArrowLeft, Copy,
 import { ProgressiveMessage, ProgressiveMessageData } from "./components/ProgressiveMessage";
 import { ProgressiveMessageManager, parseStreamMessage } from "./utils/progressiveMessageManager";
 import { Sidebar } from "./components/Sidebar";
-import { TopNavbar } from "./components/TopNavbar";
+import { TopNavbar } from "@/app/components/TopNavbar";
 
 interface Message {
   id: string | number;
@@ -432,7 +432,7 @@ function GeneratePageV0Content() {
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Chat Panel */}
-      <div className="w-[480px] bg-white border-r border-gray-200 flex flex-col">
+      <div className="w-[480px] bg-white border-r border-gray-200 flex flex-col chat-roboto">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (

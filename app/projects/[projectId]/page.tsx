@@ -7,7 +7,7 @@ import { Send, Loader2, Code2, Eye, Download, Rocket, Sparkles, ArrowLeft, Copy,
 import { ProgressiveMessage, ProgressiveMessageData } from "./components/ProgressiveMessage";
 import { ProgressiveMessageManager, parseStreamMessage } from "./utils/progressiveMessageManager";
 import { Sidebar } from "./components/Sidebar";
-import { TopNavbar } from "./components/TopNavbar";
+import { TopNavbar } from "@/app/components/TopNavbar";
 
 interface Message {
   id: string | number;
@@ -729,7 +729,7 @@ function ProjectPageContent() {
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Chat Panel */}
-      <div className="w-[480px] bg-white border-r border-gray-200 flex flex-col">
+      <div className="w-[480px] bg-white border-r border-gray-200 flex flex-col chat-roboto">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (
@@ -917,9 +917,9 @@ function ProjectPageContent() {
             </button>
           </div>
 
-          {/* Device Selector - Middle */}
-          {activeView === "preview" && (
-            <div className="flex-1 flex items-center justify-center">
+          {/* Device Selector - Right */}
+          <div className="flex items-center gap-2">
+            {activeView === "preview" && (
               <div className="relative">
                 <button
                   onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
@@ -934,7 +934,7 @@ function ProjectPageContent() {
 
                 {/* Dropdown Menu */}
                 {showDeviceDropdown && (
-                  <div className="absolute top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                     <button
                       onClick={() => {
                         setPreviewDevice("desktop");
@@ -977,12 +977,7 @@ function ProjectPageContent() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Right side placeholder */}
-          <div className="flex items-center gap-2">
-            {/* Empty space for balance */}
+            )}
           </div>
         </div>
 
