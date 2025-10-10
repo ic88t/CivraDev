@@ -27,14 +27,14 @@ export function TopNavbar({ projectName, onShare, onPublish, previewUrl }: TopNa
       {/* Left Side - Logo + Project Info */}
       <div className="flex items-center gap-4">
         {/* Civra Logo */}
-        <div className="flex items-center gap-2 z-20">
+        <a href="/" className="flex items-center gap-2 z-20">
           <img
             src="/CivraBlack.png"
             alt="Civra Logo"
             className="w-10 h-6"
           />
           {/* <ChevronDown className="w-4 h-4 text-gray-400" /> */}
-        </div>
+        </a>
 
         {/* Project Name */}
         <div className="flex items-center gap-2">

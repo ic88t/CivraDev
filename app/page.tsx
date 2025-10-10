@@ -18,7 +18,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"create" | "projects">("create");
   const [projects, setProjects] = useState<any[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
-  const [wakingProjects, setWakingProjects] = useState<Set<string>>(new Set());
   
   const modelOptions = [
     "Claude Sonnet 4",
@@ -107,54 +106,6 @@ export default function Home() {
     } finally {
       setLoadingProjects(false);
     }
-  };
-
-  const wakeUpSandbox = async (sandboxId: string, projectId?: string) => {
-    // Find the project to get both IDs
-    const project = projects.find(p => p.sandboxId === sandboxId);
-    const trackingId = projectId || project?.id || sandboxId;
-
-    // Add to waking set using the tracking ID (project database ID)
-    setWakingProjects(prev => new Set(Array.from(prev).concat([trackingId])));
-
-    try {
-      console.log(`🚀 [WAKE-UP] Starting wake-up process for sandbox: ${sandboxId} (project: ${trackingId})`);
-
-      const response = await fetch('/api/projects/wake', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sandboxId })
-      });
-
-      console.log(`📡 [WAKE-UP] API Response status: ${response.status}`);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ [WAKE-UP] API Response data:', data);
-
-        // Update the project in the list with new status and preview URL using sandboxId
-        setProjects(prev => prev.map(p =>
-          p.sandboxId === sandboxId
-            ? { ...p, status: data.status, previewUrl: data.previewUrl }
-            : p
-        ));
-        return data.previewUrl;
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ [WAKE-UP] API Error response:', errorData);
-      }
-    } catch (error) {
-      console.error('❌ [WAKE-UP] Failed to wake up sandbox:', error);
-    } finally {
-      // Remove from waking set using the tracking ID
-      setWakingProjects(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(trackingId);
-        return newSet;
-      });
-      console.log(`🏁 [WAKE-UP] Wake-up process completed for sandbox: ${sandboxId}`);
-    }
-    return null;
   };
 
   // Fetch projects when switching to projects tab
@@ -427,7 +378,14 @@ export default function Home() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {projects.map((project) => (
-                    <div key={project.id} className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 hover:border-gray-600 transition-colors">
+                    <div
+                      key={project.id}
+                      onClick={() => {
+                        // Navigate to project page
+                        router.push(`/projects/${project.id}`);
+                      }}
+                      className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 hover:border-purple-500 hover:bg-gray-900/70 transition-all cursor-pointer"
+                    >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
@@ -437,12 +395,12 @@ export default function Home() {
                           </div>
                           <div>
                             <h3 className="text-white font-semibold">{project.name || 'Unnamed Project'}</h3>
-                            <p className="text-gray-400 text-sm">{project.description || project.prompt}</p>
+                            <p className="text-gray-400 text-sm line-clamp-1">{project.description || project.prompt}</p>
                           </div>
                         </div>
-                        <div className={`px-2 py-1 rounded-full text-xs ${
+                        <div className={`px-2 py-1 rounded-full text-xs flex-shrink-0 ${
                           project.status === 'running' || project.status === 'active'
-                            ? 'bg-green-900/30 text-green-300' 
+                            ? 'bg-green-900/30 text-green-300'
                             : project.status === 'stopped' || project.status === 'inactive'
                             ? 'bg-yellow-900/30 text-yellow-300'
                             : 'bg-gray-800 text-gray-400'
@@ -450,87 +408,10 @@ export default function Home() {
                           {project.status === 'stopped' ? 'Sleeping' : project.status || 'Unknown'}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-gray-500">
                           {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
-                        </div>
-                        <div className="flex gap-2">
-                          {project.status === 'stopped' || project.status === 'inactive' ? (
-                            <>
-                              <button
-                                onClick={async () => {
-                                  const newPreviewUrl = await wakeUpSandbox(project.sandboxId, project.id);
-                                  if (newPreviewUrl) {
-                                    window.open(newPreviewUrl, '_blank');
-                                  }
-                                }}
-                                disabled={wakingProjects.has(project.id)}
-                                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                                  wakingProjects.has(project.id)
-                                    ? 'bg-yellow-400 text-yellow-900 cursor-not-allowed'
-                                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
-                                }`}
-                              >
-                                {wakingProjects.has(project.id) ? 'Waking Up...' : 'Wake & Preview'}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  console.log(`🔧 [FORCE-START] Attempting force start for: ${project.id}`);
-                                  try {
-                                    const response = await fetch('/api/projects/force-start', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ sandboxId: project.id })
-                                    });
-                                    const data = await response.json();
-                                    console.log(`🔧 [FORCE-START] Response:`, data);
-                                    
-                                    if (data.success && data.previewUrl) {
-                                      window.open(data.previewUrl, '_blank');
-                                    }
-                                  } catch (error) {
-                                    console.error(`🔧 [FORCE-START] Error:`, error);
-                                  }
-                                }}
-                                disabled={wakingProjects.has(project.id)}
-                                className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:bg-red-400"
-                              >
-                                Force Start
-                              </button>
-                            </>
-                          ) : project.previewUrl ? (
-                            <a
-                              href={project.previewUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-                            >
-                              Preview
-                            </a>
-                          ) : (
-                            <span className="px-3 py-1 bg-gray-700 text-gray-500 rounded-lg text-sm">
-                              No Preview
-                            </span>
-                          )}
-                          <button
-                            onClick={async () => {
-                              // If sandbox is sleeping, wake it up first
-                              if (project.status === 'stopped' || project.status === 'inactive') {
-                                await wakeUpSandbox(project.sandboxId, project.id);
-                              }
-                              // Navigate to project page
-                              router.push(`/projects/${project.id}`);
-                            }}
-                            disabled={wakingProjects.has(project.id)}
-                            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                              wakingProjects.has(project.id)
-                                ? 'bg-purple-400 text-purple-900 cursor-not-allowed'
-                                : 'bg-purple-600 text-white hover:bg-purple-700'
-                            }`}
-                          >
-                            {wakingProjects.has(project.id) ? 'Starting...' : 'Continue'}
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -540,136 +421,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          ) : (
-            /* Projects Tab */
-            <div className="max-w-4xl mx-auto">
-              {loadingProjects ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                  <span className="ml-3 text-gray-300">Loading projects...</span>
-                </div>
-              ) : projects.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">No projects yet</h3>
-                  <p className="text-gray-400 mb-6">Start building your first Web3 application</p>
-                  <button
-                    onClick={() => handleTabChange("create")}
-                    className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                  >
-                    Create New Project
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {projects.map((project) => (
-                    <div key={project.id} className="bg-gray-900/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6 hover:border-gray-600 transition-colors">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-white">{project.name || 'Untitled Project'}</h3>
-                            <p className="text-sm text-gray-400">{project.description || 'Web3 Application'}</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
-                          {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
-                        </div>
-                        <div className="flex gap-2">
-                          {project.status === 'stopped' || project.status === 'inactive' ? (
-                            <>
-                              <button
-                                onClick={async () => {
-                                  const newPreviewUrl = await wakeUpSandbox(project.sandboxId, project.id);
-                                  if (newPreviewUrl) {
-                                    window.open(newPreviewUrl, '_blank');
-                                  }
-                                }}
-                                disabled={wakingProjects.has(project.id)}
-                                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                                  wakingProjects.has(project.id)
-                                    ? 'bg-yellow-400 text-yellow-900 cursor-not-allowed'
-                                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
-                                }`}
-                              >
-                                {wakingProjects.has(project.id) ? 'Waking Up...' : 'Wake & Preview'}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  console.log(`🔧 [FORCE-START] Attempting force start for: ${project.id}`);
-                                  try {
-                                    const response = await fetch('/api/projects/force-start', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ sandboxId: project.id })
-                                    });
-                                    const data = await response.json();
-                                    console.log(`🔧 [FORCE-START] Response:`, data);
-                                    
-                                    if (data.success && data.previewUrl) {
-                                      window.open(data.previewUrl, '_blank');
-                                    }
-                                  } catch (error) {
-                                    console.error(`🔧 [FORCE-START] Error:`, error);
-                                  }
-                                }}
-                                disabled={wakingProjects.has(project.id)}
-                                className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:bg-red-400"
-                              >
-                                Force Start
-                              </button>
-                            </>
-                          ) : project.previewUrl ? (
-                            <a
-                              href={project.previewUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-                            >
-                              Preview
-                            </a>
-                          ) : (
-                            <span className="px-3 py-1 bg-gray-700 text-gray-500 rounded-lg text-sm">
-                              No Preview
-                            </span>
-                          )}
-                          <button
-                            onClick={async () => {
-                              // If sandbox is sleeping, wake it up first
-                              if (project.status === 'stopped' || project.status === 'inactive') {
-                                await wakeUpSandbox(project.sandboxId, project.id);
-                              }
-                              // Navigate to project page
-                              router.push(`/projects/${project.id}`);
-                            }}
-                            disabled={wakingProjects.has(project.id)}
-                            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                              wakingProjects.has(project.id)
-                                ? 'bg-purple-400 text-purple-900 cursor-not-allowed'
-                                : 'bg-purple-600 text-white hover:bg-purple-700'
-                            }`}
-                          >
-                            {wakingProjects.has(project.id) ? 'Starting...' : 'Continue'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 

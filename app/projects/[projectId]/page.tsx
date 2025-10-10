@@ -29,6 +29,7 @@ function ProjectPageContent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [sandboxId, setSandboxId] = useState<string | null>(null);
   const [generationCompleted, setGenerationCompleted] = useState(false);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [activeView, setActiveView] = useState<"preview" | "code">("preview");
   const [activeTab, setActiveTab] = useState("chat");
   const [projectName, setProjectName] = useState("New Project");
@@ -96,7 +97,18 @@ function ProjectPageContent() {
       if (project.sandboxId) {
         setGenerationCompleted(true);
         await loadChatHistory(project.sandboxId);
-        await fetchPreviewUrl(project.sandboxId);
+
+        // Wake up Daytona in the background if it's stopped/inactive
+        if (project.status === 'stopped' || project.status === 'inactive') {
+          // Wake up sandbox without blocking the UI
+          setIsLoadingPreview(true);
+          wakeUpSandbox(project.sandboxId, authHeaders);
+        } else {
+          // If already running, just fetch the preview URL
+          setIsLoadingPreview(true);
+          await fetchPreviewUrl(project.sandboxId);
+          // Don't set isLoadingPreview to false here - let the iframe onLoad handle it
+        }
       } else if (project.status === 'creating' && project.prompt && !hasStartedRef.current) {
         // Start initial generation if project is new and hasn't been started yet
         hasStartedRef.current = true;
@@ -111,6 +123,41 @@ function ProjectPageContent() {
       setIsLoading(false);
       // Optionally redirect to home if project not found
       // router.push("/");
+    }
+  };
+
+  const wakeUpSandbox = async (sandboxId: string, authHeaders: Record<string, string>) => {
+    try {
+      console.log(`🚀 [WAKE-UP] Starting wake-up process for sandbox: ${sandboxId}`);
+
+      const response = await fetch('/api/projects/wake', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({ sandboxId })
+      });
+
+      console.log(`📡 [WAKE-UP] API Response status: ${response.status}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ [WAKE-UP] API Response data:', data);
+
+        // Update preview URL when ready (keep loading state until iframe loads)
+        if (data.previewUrl) {
+          setPreviewUrl(data.previewUrl);
+          // Don't set isLoadingPreview to false here - let the iframe onLoad handle it
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ [WAKE-UP] API Error response:', errorData);
+        setIsLoadingPreview(false);
+      }
+    } catch (error) {
+      console.error('❌ [WAKE-UP] Failed to wake up sandbox:', error);
+      setIsLoadingPreview(false);
     }
   };
 
@@ -985,16 +1032,34 @@ function ProjectPageContent() {
         <div className="flex-1 bg-gray-50 overflow-hidden">
           {activeView === "preview" && (
             <>
-              {!previewUrl && !isGenerating && (
+              {!previewUrl && !isGenerating && !isLoadingPreview && (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-gray-500">Preview will appear here</p>
+                </div>
+              )}
+
+              {isLoadingPreview && !previewUrl && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center space-y-4">
+                    <div className="relative w-20 h-20 mx-auto">
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 animate-pulse"></div>
+                      <div className="absolute inset-2 rounded-xl bg-gray-50"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-gray-900 font-medium text-lg">Loading Environment</p>
+                      <p className="text-gray-500 text-sm mt-1">Waking up your Daytona workspace...</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {previewUrl && (
                 <div className="w-full h-full p-4 flex items-center justify-center">
                   <div
-                    className={`h-full rounded-lg overflow-hidden border border-gray-300 shadow-lg bg-white transition-all duration-300 ${
+                    className={`h-full rounded-lg overflow-hidden border border-gray-300 shadow-lg bg-white transition-all duration-300 relative ${
                       previewDevice === "desktop" ? "w-full" :
                       previewDevice === "tablet" ? "w-[768px]" :
                       "w-[375px]"
@@ -1011,12 +1076,24 @@ function ProjectPageContent() {
                         {previewUrl}
                       </div>
                     </div>
+
+                    {/* Loading Overlay */}
+                    {isLoadingPreview && (
+                      <div className="absolute inset-0 top-8 bg-gray-50 flex items-center justify-center z-10">
+                        <div className="text-center space-y-3">
+                          <Loader2 className="w-8 h-8 text-purple-600 animate-spin mx-auto" />
+                          <p className="text-gray-700 font-medium">Loading...</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Iframe */}
                     <iframe
                       src={previewUrl}
                       className="w-full h-[calc(100%-2rem)] border-0"
                       title="Website Preview"
                       sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+                      onLoad={() => setIsLoadingPreview(false)}
                     />
                   </div>
                 </div>
