@@ -1,15 +1,17 @@
 /**
  * Parser for Civra-style XML command tags
- * Handles: <dec-write>, <dec-delete>, <dec-rename>, <dec-add-dependency>
+ * Handles: <dec-write>, <dec-delete>, <dec-rename>, <dec-add-dependency>, <dec-search-replace>
  */
 
 export interface FileOperation {
-  type: 'write' | 'delete' | 'rename' | 'add-dependency';
+  type: 'write' | 'delete' | 'rename' | 'add-dependency' | 'search-replace';
   filePath?: string;
   content?: string;
   originalPath?: string;
   newPath?: string;
   package?: string;
+  search?: string;
+  replace?: string;
 }
 
 export interface ParsedResponse {
@@ -115,6 +117,26 @@ function parseAddDependencyOperations(codeBlock: string): FileOperation[] {
 }
 
 /**
+ * Parse <dec-search-replace> tags
+ */
+function parseSearchReplaceOperations(codeBlock: string): FileOperation[] {
+  const operations: FileOperation[] = [];
+  const searchReplaceRegex = /<dec-search-replace\s+file_path="([^"]+)">\s*<search>([\s\S]*?)<\/search>\s*<replace>([\s\S]*?)<\/replace>\s*<\/dec-search-replace>/g;
+
+  let match;
+  while ((match = searchReplaceRegex.exec(codeBlock)) !== null) {
+    operations.push({
+      type: 'search-replace',
+      filePath: match[1],
+      search: match[2].trim(),
+      replace: match[3].trim()
+    });
+  }
+
+  return operations;
+}
+
+/**
  * Main parser function
  */
 export function parseCivraResponse(responseText: string): ParsedResponse {
@@ -154,7 +176,8 @@ export function parseCivraResponse(responseText: string): ParsedResponse {
       ...parseWriteOperations(result.codeBlock),
       ...parseDeleteOperations(result.codeBlock),
       ...parseRenameOperations(result.codeBlock),
-      ...parseAddDependencyOperations(result.codeBlock)
+      ...parseAddDependencyOperations(result.codeBlock),
+      ...parseSearchReplaceOperations(result.codeBlock)
     ];
   } else {
     // No dec-code block found, treat entire response as explanation

@@ -965,11 +965,20 @@ function ProjectPageContent() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!generationCompleted || isGenerating}
-                className="w-7 h-7 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className={`w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors ${
+                  attachedImages.length > 0
+                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
                 title="Attach images"
               >
-                <Plus className="w-4 h-4" />
+                <ImageIcon className="w-4 h-4" />
               </button>
+              {attachedImages.length > 0 && (
+                <span className="text-xs text-gray-500 font-medium">
+                  {attachedImages.length} image{attachedImages.length > 1 ? 's' : ''}
+                </span>
+              )}
 
               {/* Edit/Design button */}
               <button

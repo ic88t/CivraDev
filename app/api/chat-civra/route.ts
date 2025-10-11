@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { trackUsageWithCredits, hasCredits } from "@/lib/credits";
 import { getCurrentUserFromRequest, getCurrentUser } from "@/lib/auth-utils";
 import { parseCivraResponse, hasCodeOperations } from "@/lib/civra-parser";
+import { getRelevantFiles, buildFileContext } from "@/lib/smart-context";
 import { createClient } from '@supabase/supabase-js';
 import fs from "fs";
 import path from "path";
@@ -206,30 +207,27 @@ export async function POST(req: NextRequest) {
           projectDir
         );
 
-        // Read allowed files (similar to Civra prompt structure)
-        const allowedFiles = [
-          "package.json",
-          "tsconfig.json",
-          "next.config.ts",
-          "next.config.js",
-          "app/page.tsx",
-          "app/layout.tsx",
-          "app/globals.css",
-          "tailwind.config.ts",
-        ];
+        // Use smart file selection based on user message and conversation history
+        const relevantFiles = getRelevantFiles(message, conversationHistory);
 
-        let codeContext = "## Current Project Files\n\n";
+        console.log(`[CIVRA-CHAT] Smart file selection chose ${relevantFiles.length} files:`, relevantFiles);
 
-        for (const file of allowedFiles) {
+        // Read relevant files
+        const fileContents: Record<string, string> = {};
+
+        for (const file of relevantFiles) {
           const fileContent = await sandbox.process.executeCommand(
             `cat ${file} 2>/dev/null || echo ""`,
             projectDir
           );
 
           if (fileContent.result && fileContent.result.trim().length > 0) {
-            codeContext += `### ${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
+            fileContents[file] = fileContent.result;
           }
         }
+
+        // Build context string using smart-context utility
+        const codeContext = buildFileContext(fileContents);
 
         // Build the system prompt using Civra agent prompt template
         // Insert project context before "First Message Instructions" section
@@ -461,6 +459,38 @@ export async function POST(req: NextRequest) {
                 );
 
                 console.log(`[CIVRA-CHAT] Installed: ${op.package}`);
+              } else if (op.type === "search-replace" && op.filePath && op.search && op.replace !== undefined) {
+                // Read current file content
+                const currentContent = await sandbox.process.executeCommand(
+                  `cat ${op.filePath}`,
+                  projectDir
+                );
+
+                if (currentContent.result) {
+                  // Perform search and replace
+                  const newContent = currentContent.result.replace(op.search, op.replace);
+
+                  // Check if replacement was made
+                  if (newContent === currentContent.result) {
+                    console.log(`[CIVRA-CHAT] Warning: Search pattern not found in ${op.filePath}`);
+                  }
+
+                  // Write back the modified content
+                  await sandbox.process.executeCommand(
+                    `cat > ${op.filePath} << 'FILE_EOF'\n${newContent}\nFILE_EOF`,
+                    projectDir
+                  );
+
+                  await safeWrite(
+                    `data: ${JSON.stringify({
+                      type: "tool_use",
+                      name: "Search-Replace",
+                      input: { file_path: op.filePath },
+                    })}\n\n`
+                  );
+
+                  console.log(`[CIVRA-CHAT] Search-replaced in file: ${op.filePath}`);
+                }
               }
             } catch (opError) {
               console.error(
