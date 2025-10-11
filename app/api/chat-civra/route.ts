@@ -200,40 +200,34 @@ export async function POST(req: NextRequest) {
           })}\n\n`
         );
 
-        // Read files in parallel instead of sequentially for speed
+        // Get file structure for context
+        const fileTree = await sandbox.process.executeCommand(
+          `find . -type f -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./.git/*" | head -50`,
+          projectDir
+        );
+
+        // Read allowed files (similar to Civra prompt structure)
         const allowedFiles = [
           "package.json",
+          "tsconfig.json",
+          "next.config.ts",
+          "next.config.js",
           "app/page.tsx",
           "app/layout.tsx",
           "app/globals.css",
+          "tailwind.config.ts",
         ];
 
         let codeContext = "## Current Project Files\n\n";
 
-        // Read all files in parallel
-        const fileReadPromises = allowedFiles.map(async (file) => {
-          try {
-            const fileContent = await sandbox.process.executeCommand(
-              `cat ${file} 2>/dev/null || echo ""`,
-              projectDir
-            );
+        for (const file of allowedFiles) {
+          const fileContent = await sandbox.process.executeCommand(
+            `cat ${file} 2>/dev/null || echo ""`,
+            projectDir
+          );
 
-            if (fileContent.result && fileContent.result.trim().length > 0) {
-              return { file, content: fileContent.result };
-            }
-            return null;
-          } catch (error) {
-            console.log(`[CIVRA-CHAT] Failed to read ${file}:`, error);
-            return null;
-          }
-        });
-
-        const fileResults = await Promise.all(fileReadPromises);
-
-        // Build context from results
-        for (const result of fileResults) {
-          if (result) {
-            codeContext += `### ${result.file}\n\`\`\`\n${result.content}\n\`\`\`\n\n`;
+          if (fileContent.result && fileContent.result.trim().length > 0) {
+            codeContext += `### ${file}\n\`\`\`\n${fileContent.result}\n\`\`\`\n\n`;
           }
         }
 
@@ -252,11 +246,9 @@ export async function POST(req: NextRequest) {
         );
 
         // Prepare conversation for Claude
+        // For chat continuation, we only need the current message + project context
+        // The system prompt already includes the project files, so Claude has full context
         const messages = [
-          ...conversationHistory.map((msg: any) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
           {
             role: "user",
             content: message,

@@ -205,60 +205,10 @@ function ProjectPageContent() {
         const data = await response.json();
         console.log('✅ [WAKE-UP] API Response data:', data);
 
-        // Set preview URL when wake-up completes
+        // Update preview URL when ready (keep loading state until iframe loads)
         if (data.previewUrl) {
-          console.log('✅ [WAKE-UP] Wake-up complete! Received preview URL:', data.previewUrl);
-          console.log('✅ [WAKE-UP] Server ready status:', data.serverReady);
-
-          // Poll the preview URL until it responds successfully
-          // This ensures dev server is actually ready before showing iframe
-          const pollDevServer = async () => {
-            const maxAttempts = 30; // 30 attempts = 30 seconds max
-            let attempt = 0;
-
-            console.log('🔄 [WAKE-UP] Polling dev server until ready...');
-
-            while (attempt < maxAttempts) {
-              attempt++;
-
-              try {
-                // Try to fetch the preview URL
-                const pingResponse = await fetch(data.previewUrl, {
-                  method: 'HEAD',
-                  mode: 'no-cors'
-                });
-
-                console.log(`✅ [WAKE-UP] Dev server responding! (attempt ${attempt})`);
-                return true;
-              } catch (error) {
-                console.log(`⏳ [WAKE-UP] Dev server not ready yet (attempt ${attempt}/${maxAttempts})`);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between attempts
-              }
-            }
-
-            console.warn('⚠️ [WAKE-UP] Dev server not responding after 30s, showing iframe anyway');
-            return false;
-          };
-
-          // Poll dev server, then show iframe
-          pollDevServer().then((isReady) => {
-            console.log('🎬 [WAKE-UP] Setting preview URL in iframe now');
-            setPreviewUrl(data.previewUrl);
-
-            // Clear loading overlay
-            setTimeout(() => {
-              setIsLoadingPreview(false);
-            }, 1000);
-
-            // Trigger screenshot capture after iframe loads
-            setTimeout(() => {
-              captureScreenshotInBackground(authHeaders);
-            }, 5000);
-          });
-        } else {
-          // No preview URL - clear loading and show error state
-          console.warn('⚠️ [WAKE-UP] No preview URL received');
-          setIsLoadingPreview(false);
+          setPreviewUrl(data.previewUrl);
+          // Don't set isLoadingPreview to false here - let the iframe onLoad handle it
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
